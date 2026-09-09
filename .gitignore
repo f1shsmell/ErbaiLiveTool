@@ -1,0 +1,41 @@
+# Build artifacts
+bin/
+obj/
+publish/
+publish-trim/
+artifacts/
+TestResults/
+*.binlog
+*.log
+
+# 安装器编译产物（Setup.exe 与编译日志，不入库；构建见 tools/build-installer.ps1）
+installer/Output/
+
+# 根目录发布 zip（9 条目分发包，不入库；Stage B 后用安装器形态分发）
+/ErbaiLiveTool-*.zip
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# Reasonix 会话元数据
+.reasonix/
+
+# 内部文档(docs/)不入库：交接说明/决策记录/协议契约属私有，不随开源仓库发布
+docs/
+
+# Runtime data (databases / logs，运行期产物不入库)
+logs/
+*.db
+*.db-shm
+*.db-wal
+config.local.json
+
+# Vendored third-party binaries（341MB 连接器 exe，见 vendor/README.md）
+vendor/*
+!vendor/README.md
+
+# 本机 Reasonix 沙箱配置(不入库)
+reasonix.toml

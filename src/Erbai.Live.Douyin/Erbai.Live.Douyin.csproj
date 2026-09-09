@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 抖音弹幕插件宿主：Grabber 子进程管理 / 代理快照还原 / 日志分级（阶段 4）。
+       依赖方向：平台层 → SongRequest（用户持久化 UserService，对齐旧 app_lifecycle → song_service）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+    <ProjectReference Include="..\Erbai.Modules.SongRequest\Erbai.Modules.SongRequest.csproj" />
+    <!-- stdout 行解码 GBK 回退（04 §3.2 _decode_line 平移；UTF-8 失败回退 GBK） -->
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <!-- DouyinGrabberHost.BuildHostConfigJson 等 internal 成员单测（Erbai.Live.Douyin.Tests 内） -->
+    <InternalsVisibleTo Include="Erbai.Live.Douyin.Tests" />
+  </ItemGroup>
+</Project>

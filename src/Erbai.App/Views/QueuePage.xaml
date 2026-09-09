@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.QueuePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux"
+    xmlns:views="using:Erbai.App.Views">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Spacing="2">
+            <TextBlock Text="点歌队列" Style="{StaticResource PageTitleTextStyle}" />
+            <TextBlock Text="观众经弹幕「点歌 歌名 - 歌手」提交；选中行后可用底部操作" Style="{StaticResource CaptionTextStyle}" />
+        </StackPanel>
+
+        <!-- 手动点歌 + 队列操作（评审第一轮 #3/#5/#6） -->
+        <StackPanel Grid.Row="1" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBox x:Name="ManualSongBox" HorizontalAlignment="Stretch" PlaceholderText="歌名 - 歌手，回车提交（无需输入点歌）" KeyDown="OnManualSongKeyDown" />
+                <Button Content="添加" Style="{StaticResource AccentButtonStyle}" Click="OnManualSongSubmit" />
+                <TextBlock x:Name="ManualStatus" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="CompleteButton" Content="标记完成" Click="OnComplete" />
+                <Button x:Name="SkipButton" Content="跳过" Click="OnSkip" />
+                <Button x:Name="RemoveButton" Content="移出队列" Click="OnRemove" />
+                <TextBlock x:Name="SelectionHint" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- 表头骨架（队列为空也保留，让用户知道有数据时长什么样） -->
+        <Border Grid.Row="2" Style="{StaticResource TableHeaderBorderStyle}">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="80" />
+                    <ColumnDefinition Width="150" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="顺序" Style="{StaticResource CaptionTextStyle}" />
+                <TextBlock Grid.Column="1" Text="歌曲" Style="{StaticResource CaptionTextStyle}" />
+                <TextBlock Grid.Column="2" Text="点歌人" Style="{StaticResource CaptionTextStyle}" />
+                <TextBlock Grid.Column="3" Text="来源" Style="{StaticResource CaptionTextStyle}" />
+                <TextBlock Grid.Column="4" Text="状态" Style="{StaticResource CaptionTextStyle}" />
+                <TextBlock Grid.Column="5" Text="操作" Style="{StaticResource CaptionTextStyle}" />
+            </Grid>
+        </Border>
+
+        <!-- 列表 + 空状态 -->
+        <Grid Grid.Row="3">
+            <ListView x:Name="QueueList" SelectionMode="Single" SelectionChanged="OnSelectionChanged">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0,4" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="views:QueueDisplay">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{x:Bind Position}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind SongName}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Singer}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis"
+                                           Visibility="{x:Bind HasSinger}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="{x:Bind Requester}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="3" Text="{x:Bind SourceText}" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="★" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" Visibility="{x:Bind IsCurrent}" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Bind StatusText}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <Button Content="标记完成" Style="{StaticResource InlineActionButtonStyle}"
+                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnCompleteInline"
+                                        Visibility="{x:Bind IsCurrent}" />
+                                <Button Content="跳过" Style="{StaticResource InlineActionButtonStyle}"
+                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnSkipInline"
+                                        Visibility="{x:Bind IsCurrent}" />
+                                <Button Content="移出队列" Style="{StaticResource InlineActionButtonStyle}"
+                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnRemoveInline"
+                                        Visibility="{x:Bind NeedsRemoval}" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <ux:EmptyState x:Name="QueueEmptyState" Symbol="MusicInfo"
+                           Title="暂无待播歌曲"
+                           Subtitle="可在上方手动点歌，或等待直播间观众发送「点歌 歌名 - 歌手」提交。" />
+        </Grid>
+    </Grid>
+</Page>

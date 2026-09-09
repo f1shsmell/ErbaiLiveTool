@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:ux="using:Erbai.App.Ux"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 评审第一轮 #9：去掉每字段一张卡片的布局，改为 600-680px 标准设置表单行；
+         状态与操作合并到同一行（播放器状态、登录状态）。 -->
+    <ScrollViewer>
+        <StackPanel Padding="24,24,24,24" Spacing="14" MaxWidth="680" HorizontalAlignment="Left">
+
+            <TextBlock Text="设置" Style="{StaticResource PageTitleTextStyle}" Margin="0,0,0,4" />
+
+            <!-- 常规（托盘常驻 2026-09：点 X 默认隐藏到托盘后台运行，托盘菜单退出） -->
+            <TextBlock Text="常规" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="关闭时最小化到托盘" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="MinimizeToTrayToggle" OffContent="关" OnContent="开" />
+                    <TextBlock Text="点击关闭按钮后程序在后台继续运行（弹幕监听不中断）；从系统托盘图标恢复或退出" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 音乐播放器 -->
+            <TextBlock Text="音乐播放器" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="播放器" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ComboBox x:Name="PlayerKeyCombo" Width="220" SelectionChanged="OnPlayerKeyChanged">
+                        <ComboBoxItem Content="落雪音乐" Tag="lxmusic" />
+                        <ComboBoxItem Content="网易云音乐" Tag="netease" />
+                        <ComboBoxItem Content="酷狗音乐" Tag="kugou" />
+                        <ComboBoxItem Content="QQ音乐" Tag="qqmusic" />
+                        <ComboBoxItem Content="Folia" Tag="folia" />
+                    </ComboBox>
+                    <TextBlock x:Name="PlayerStatusText" Text="-" VerticalAlignment="Center" IsTextSelectionEnabled="True"
+                               Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Border x:Name="FoliaTokenCard" Visibility="Collapsed">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Folia Token" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" x:Name="FoliaTokenBox" Width="300" HorizontalAlignment="Left"
+                             PlaceholderText="bilincm.cn 的 Folia 访问 token" />
+                </Grid>
+            </Border>
+
+            <!-- B站账号（状态 + 操作合并到同一行） -->
+            <TextBlock Text="B站账号" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="账号状态" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <ux:StatusBadge x:Name="LoginBadge" />
+                    <TextBlock x:Name="LoginStatusText" Text="未登录" VerticalAlignment="Center" IsTextSelectionEnabled="True"
+                               Style="{StaticResource CaptionTextStyle}" />
+                    <Button x:Name="QrLoginButton" Content="扫码登录" Click="OnQrLogin" />
+                    <Button x:Name="LogoutButton" Content="退出登录" IsEnabled="False" Click="OnLogout" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 空闲歌单 -->
+            <TextBlock Text="空闲歌单" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="启用空闲歌单" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="IdleEnabledToggle" OffContent="关" OnContent="开" />
+                    <TextBlock Text="队列空时自动播放背景音乐；新点歌立即打断" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="播放间隔（秒）" VerticalAlignment="Center" />
+                <NumberBox Grid.Column="1" x:Name="IdleIntervalBox" Minimum="1" Maximum="3600" Value="30" Width="140"
+                           HorizontalAlignment="Left" />
+            </Grid>
+
+            <!-- 点歌队列 -->
+            <TextBlock Text="点歌队列" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="队列容量" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <NumberBox x:Name="QueueMaxSizeBox" Minimum="1" Maximum="999" Value="20" Width="140" />
+                    <TextBlock Text="同时最多保留几首待播放歌曲（含正在播放）" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="单用户上限" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+                    <ToggleSwitch x:Name="QueueUserLimitToggle" OffContent="不限制" OnContent="限制" />
+                    <NumberBox x:Name="QueueMaxPerUserBox" Minimum="1" Maximum="100" Value="1" Width="140" />
+                    <TextBlock Text="同一观众最多同时保留的未完成歌曲数" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="重复点歌去重" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="QueueDedupeToggle" OffContent="关" OnContent="开" />
+                    <TextBlock Text="同一首歌已在队列时拒绝重复点歌" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="队列展示条数" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <NumberBox x:Name="QueueDisplayLimitBox" Minimum="1" Maximum="100" Value="5" Width="140" />
+                    <TextBlock Text="快照/网页播放列表显示的最大条目数" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 点歌等级门槛（粉丝团/灯牌等级；≤0 不限制，管理者绕过） -->
+            <TextBlock Text="点歌等级门槛" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="抖音粉丝团等级" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+                    <ToggleSwitch x:Name="DouyinFanLevelToggle" OffContent="不限制" OnContent="限制" />
+                    <NumberBox x:Name="DouyinFanLevelBox" Minimum="1" Maximum="99" Value="1" Width="140" />
+                    <TextBlock Text="灯牌等级达到该级（含）才可点歌；等级未识别时拒绝" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="B站粉丝勋章等级" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+                    <ToggleSwitch x:Name="BilibiliMedalLevelToggle" OffContent="不限制" OnContent="限制" />
+                    <NumberBox x:Name="BilibiliMedalLevelBox" Minimum="1" Maximum="99" Value="1" Width="140" />
+                    <TextBlock Text="佩戴粉丝勋章并达到该级（含）才可点歌；等级未识别时拒绝" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="主播/管理员绕过" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="AdminBypassToggle" OffContent="不绕过" OnContent="绕过" />
+                    <TextBlock Text="主播、管理员（房管）点歌不受等级门槛限制" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 备份 / 恢复 -->
+            <TextBlock Text="日志" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="直播事件落盘" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <ToggleSwitch x:Name="LiveEventLogToggle" OffContent="关" OnContent="开" />
+                    <TextBlock Text="弹幕/礼物等事件写入 logs/erbai-live-*.log；日志页打开时回看当天直播事件" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="备份 / 恢复" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="备份" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <Button Content="创建备份" Click="OnCreateBackup" />
+                    <Button Content="打开备份目录" Click="OnOpenBackupFolder" />
+                    <TextBlock Text="数据库一致性快照 + 配置 → zip" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="从备份恢复" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <ComboBox x:Name="BackupListCombo" Width="320" PlaceholderText="选择备份文件…" />
+                    <Button Content="恢复" Click="OnRestoreBackup" />
+                </StackPanel>
+            </Grid>
+            <TextBlock x:Name="BackupStatus" Text="" IsTextSelectionEnabled="True" Style="{StaticResource CaptionTextStyle}" Margin="152,0,0,0" />
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,14,0,8">
+                <Button Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="OnSave" />
+                <TextBlock x:Name="SaveStatus" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

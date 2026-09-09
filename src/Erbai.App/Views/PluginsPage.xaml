@@ -1,0 +1,196 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.PluginsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:lab="using:CommunityToolkit.WinUI.Controls"
+    xmlns:views="using:Erbai.App.Views">
+
+    <Page.Resources>
+        <!-- 状态徽章着色:运行绿 / 非运行红 -->
+        <views:RunningStateToBrushConverter x:Key="RunningToBrush" />
+        <!-- 目录式插件:配置项只读展示模板 -->
+        <DataTemplate x:Key="PluginConfigItemTemplate" x:DataType="views:PluginConfigItemDisplay">
+            <TextBlock Text="{x:Bind Summary}" FontSize="12" Margin="0,2" TextWrapping="Wrap" />
+        </DataTemplate>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <StackPanel Padding="24,24,24,24" Spacing="4" MaxWidth="1000" HorizontalAlignment="Left">
+
+            <TextBlock Text="插件" Style="{StaticResource PageTitleTextStyle}" Margin="0,0,0,4" />
+            <TextBlock Text="直播平台与播放器为连接型插件（在概览页与设置页操作）；此处查看连接状态并管理功能模块与搜索源。"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16" />
+
+            <!-- 目录式插件（Plugins/，决策 #4/#16 + Stage A）：列表 + 启停 + 配置项只读 -->
+            <TextBlock Text="目录式插件" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,4" />
+            <TextBlock Text="第三方插件按目录放置（每插件一子目录 + config.ini，见 docs/07）：关闭即时卸载，开启即时生效（新放入的插件目录需重启后加载）。"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                <TextBlock Text="{x:Bind PluginRootText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" />
+                <Button Content="打开插件目录" Click="OnOpenPluginsFolder" Padding="8,2" FontSize="11" />
+            </StackPanel>
+            <TextBlock x:Name="DirectoryPluginsStatusText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap"
+                       Margin="0,2,0,4" Visibility="Collapsed" />
+            <ListView x:Name="DirectoryPluginsList" SelectionMode="None" Margin="0,4,0,4">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="views:PluginDirectoryDisplay">
+                        <Border CornerRadius="6" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" Padding="12,8" Margin="0,0,0,8"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                            <Border CornerRadius="8" Padding="6,1" Background="{x:Bind StatusBrush}">
+                                                <TextBlock Text="{x:Bind StatusText}" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{x:Bind MetaText}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Text="{x:Bind Description}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextWrapping="Wrap" Visibility="{x:Bind HasDescription}" />
+                                        <TextBlock Text="{x:Bind Error}" FontSize="11" Foreground="Red"
+                                                   TextWrapping="Wrap" Visibility="{x:Bind IsFailed}" />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OffContent="" OnContent=""
+                                                  IsOn="{x:Bind IsEnabled, Mode=OneWay}"
+                                                  Toggled="OnDirectoryPluginToggled"
+                                                  Tag="{x:Bind DirectoryKey}" />
+                                </Grid>
+                                <Expander HorizontalAlignment="Stretch" Visibility="{x:Bind HasConfig}">
+                                    <Expander.Header>
+                                        <TextBlock Text="配置项" FontSize="11" />
+                                    </Expander.Header>
+                                    <ItemsControl ItemsSource="{x:Bind Config}"
+                                                  ItemTemplate="{StaticResource PluginConfigItemTemplate}" />
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <TextBlock x:Name="DirectoryPluginsEmptyText" Text="Plugins 目录为空或不存在——把插件目录放进上方位置后重启应用即可加载。"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+            <!-- 直播平台:状态一览(只读; 统一连接状态 #8: 圆点+文字+颜色) -->
+            <TextBlock Text="直播平台" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,4" />
+            <lab:SettingsCard Header="B站直播">
+                <lab:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8F1;" />
+                </lab:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" Fill="{x:Bind BiliState, Converter={StaticResource StateToBrush}}"
+                             VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind BiliState, Converter={StaticResource StateToText}}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="BiliDetailText" Text="-" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </lab:SettingsCard>
+            <lab:SettingsCard Header="抖音直播">
+                <lab:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE7F4;" />
+                </lab:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" Fill="{x:Bind DouyinState, Converter={StaticResource StateToBrush}}"
+                             VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind DouyinState, Converter={StaticResource StateToText}}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="DouyinDetailText" Text="-" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </lab:SettingsCard>
+
+            <!-- 音乐播放器:状态一览(只读) -->
+            <TextBlock Text="音乐播放器" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,4" />
+            <lab:SettingsCard Header="当前播放器">
+                <lab:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8D6;" />
+                </lab:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" Fill="{x:Bind PlayerState, Converter={StaticResource StateToBrush}}"
+                             VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind PlayerState, Converter={StaticResource StateToText}}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="PlayerNameText" Text="-" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </lab:SettingsCard>
+            <lab:SettingsCard Header="连接器状态">
+                <TextBlock x:Name="PlayerDetailText" Text="-" IsTextSelectionEnabled="True" />
+            </lab:SettingsCard>
+
+            <!-- 功能模块:集中开关 -->
+            <TextBlock Text="功能模块" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,4" />
+            <lab:SettingsExpander Header="排队模块" Description="弹幕排队 + 礼物插队规则">
+                <lab:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE716;" />
+                </lab:SettingsExpander.HeaderIcon>
+                <ToggleSwitch x:Name="QueueUpEnabledToggle" OffContent="关" OnContent="开" Toggled="OnModuleToggled" />
+                <lab:SettingsExpander.Items>
+                    <lab:SettingsCard Header="队列容量">
+                        <NumberBox x:Name="QueueUpMaxBox" Minimum="1" Maximum="500" Value="50" Width="120" />
+                    </lab:SettingsCard>
+                    <lab:SettingsCard Header="仅限有资格者排队" Description="送礼授予资格">
+                        <ToggleSwitch x:Name="QueueUpGateToggle" OffContent="关" OnContent="开" />
+                    </lab:SettingsCard>
+                    <lab:SettingsCard Header="礼物插队规则" Description="按顺序第一条命中生效"
+                                      ContentAlignment="Vertical">
+                        <StackPanel Spacing="8" HorizontalAlignment="Stretch">
+                            <ListView x:Name="RulesList" MaxHeight="160" SelectionMode="Single">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="views:QueueUpRuleDisplay">
+                                        <TextBlock Text="{x:Bind Description}" />
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox x:Name="RuleMatchKindCombo" Width="120" SelectedIndex="0">
+                                    <ComboBoxItem Content="礼物名" Tag="gift_name" />
+                                    <ComboBoxItem Content="电池阈值" Tag="coin_threshold" />
+                                </ComboBox>
+                                <TextBox x:Name="RuleMatchValueBox" Width="140" PlaceholderText="礼物名 / 电池数" />
+                                <ComboBox x:Name="RuleActionCombo" Width="120" SelectedIndex="0">
+                                    <ComboBoxItem Content="插入名次" Tag="insert_at" />
+                                    <ComboBoxItem Content="授予资格" Tag="grant_eligibility" />
+                                </ComboBox>
+                                <NumberBox x:Name="RulePositionBox" Minimum="1" Maximum="500" Value="1" Width="90" />
+                                <Button Content="添加规则" Click="OnAddRule" />
+                                <Button Content="删除选中" Click="OnDeleteRule" />
+                            </StackPanel>
+                        </StackPanel>
+                    </lab:SettingsCard>
+                </lab:SettingsExpander.Items>
+            </lab:SettingsExpander>
+            <lab:SettingsExpander Header="礼物特效" Description="礼物事件 → overlay 横幅动画">
+                <lab:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xEE56;" />
+                </lab:SettingsExpander.HeaderIcon>
+                <ToggleSwitch x:Name="GiftFxEnabledToggle" OffContent="关" OnContent="开" Toggled="OnModuleToggled" />
+                <lab:SettingsExpander.Items>
+                    <lab:SettingsCard Header="特效时长（秒）">
+                        <NumberBox x:Name="GiftFxDurationBox" Minimum="1" Maximum="60" Value="5" Width="120" />
+                    </lab:SettingsCard>
+                </lab:SettingsExpander.Items>
+            </lab:SettingsExpander>
+
+            <!-- 搜索源:多选 -->
+            <TextBlock Text="搜索源" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,4" />
+            <lab:SettingsCard Header="启用搜索源" Description="点歌时聚合检索，至少启用一个">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="24">
+                        <CheckBox x:Name="KugouProviderCheck" Content="酷狗" />
+                        <CheckBox x:Name="NeteaseProviderCheck" Content="网易云" />
+                        <CheckBox x:Name="QQMusicProviderCheck" Content="QQ音乐" />
+                    </StackPanel>
+                    <TextBlock x:Name="ProviderStatus" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+                </StackPanel>
+            </lab:SettingsCard>
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,20,0,8">
+                <Button Content="保存模块设置" Style="{StaticResource AccentButtonStyle}" Click="OnSaveModules" />
+                <Button Content="保存搜索源" Click="OnSaveProviders" />
+                <TextBlock x:Name="ModuleSaveStatus" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

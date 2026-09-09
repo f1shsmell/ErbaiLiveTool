@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 内嵌 Kestrel：Overlay 页面 + 只读 API + WS（回环绑定 + overlay token，阶段 2） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+  </ItemGroup>
+</Project>

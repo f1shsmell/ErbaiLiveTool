@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 点歌模块：11 态状态机 / 权限 / 搜索源 / 播放状态机（阶段 2，行为契约见 docs/03） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 测试专用：允许 Erbai.Modules.SongRequest.Tests 访问 internal（测试置位等） -->
+    <InternalsVisibleTo Include="Erbai.Modules.SongRequest.Tests" />
+  </ItemGroup>
+</Project>

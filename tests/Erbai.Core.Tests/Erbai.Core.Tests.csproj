@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Core\Erbai.Core.csproj" />
+    <!-- 内置模块迁移（Stage A 遗留②）装配契约测试：以真实 QueueUp 模块做目录式插件加载 -->
+    <ProjectReference Include="..\..\src\Erbai.Modules.QueueUp\Erbai.Modules.QueueUp.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Stage A 假插件：测试进程内编译为真实 DLL，构建后拷贝进输出目录的 Plugins/ 布局，
+         供 PluginLoaderTests 以"真实第三方插件"形态加载（ALC + 共享契约 + 卸载回收验证） -->
+    <ProjectReference Include="..\Erbai.TestPlugins\FeatureModulePlugin\FeatureModulePlugin.csproj" />
+    <ProjectReference Include="..\Erbai.TestPlugins\PlayerPlugin\PlayerPlugin.csproj" />
+    <ProjectReference Include="..\Erbai.TestPlugins\LivePlatformPlugin\LivePlatformPlugin.csproj" />
+    <ProjectReference Include="..\Erbai.TestPlugins\InjectedFeaturePlugin\InjectedFeaturePlugin.csproj" />
+  </ItemGroup>
+  <Target Name="CopyTestPlugins" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetDir)FakeFeatureModule.dll" DestinationFolder="$(TargetDir)plugins\feature-module\" />
+    <Copy SourceFiles="$(TargetDir)FakePlayerModule.dll" DestinationFolder="$(TargetDir)plugins\player-module\" />
+    <Copy SourceFiles="$(TargetDir)FakeLivePlatform.dll" DestinationFolder="$(TargetDir)plugins\live-platform\" />
+    <Copy SourceFiles="$(TargetDir)FakeInjectedFeatureModule.dll" DestinationFolder="$(TargetDir)plugins\injected-feature\" />
+  </Target>
+</Project>

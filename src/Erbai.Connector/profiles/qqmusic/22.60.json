@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "fileVersion": "22.60",
+  "clientSha256": "DDF538362972357E7637019192D593A136EE0B7D9330EBCE583289BDAA58B2A6",
+  "commonSha256": "F134E98C4698864B5400D4F247C43299E79E9616A7131042378E78AA5850EBA4",
+  "singleSongPlayDispatchRva": "0x004A7494",
+  "expectedPlayDispatchBytes": "E8 E7 8C 16 00",
+  "getCatManagerRva": "0x0000F0ED",
+  "getQqUinExRva": "0x0002E1E5",
+  "songItemConstructorRva": "0x0004B8D0",
+  "songItemDestructorRva": "0x0004B410",
+  "addSongsRva": "0x00458F50",
+  "hiddenCategoryIdRva": "0x00C5D1D0",
+  "getListRootRva": "0x00632DD0",
+  "getListHelperRva": "0x00632F30",
+  "getCategoryCountRva": "0x00509A60",
+  "songItemSize": "0xA0",
+  "evidence": "2026-08-30 normalized hash-locked mapping + AddSongs ABI capture + live validation on 22.60；22.60 的 AddSongs 第4参数为引用计数智能指针（与 22.52 一致），trampoline 已在调用前覆盖 use count 字段（data+0xD0=2）跳过返回析构虚析构，规避 0xc0000005（2026-09-02 崩溃转储适配）。index 语义 2026-09-03 实机修正：playbysongid 加歌为尾部追加（index=max(count-1,0)），之前「头部插入」结论是 X86Emitter 跳转位移 bug（jns 落到 xor 兜底、index 恒 0）在 count=1 单样本下的误判，count 累积到 3/4 首后由实机日志证伪。"
+}

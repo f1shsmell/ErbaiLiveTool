@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 排队队列模块（最小版）：骨架 + 礼物插队规则引擎（阶段 5） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+  </ItemGroup>
+</Project>

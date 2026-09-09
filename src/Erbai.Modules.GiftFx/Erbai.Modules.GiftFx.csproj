@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 礼物特效模块：框架通道（事件→WS→overlay 渲染层，阶段 5） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+  </ItemGroup>
+</Project>

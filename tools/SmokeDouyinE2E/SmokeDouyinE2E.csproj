@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 阶段4 退出标准冒烟：真实抖音房间 → Grabber → 弹幕 → LiveEvent → 点歌命令 → 队列。
+       需管理员终端（Grabber 抓包 + 系统代理）；真实链路手动验收（docs/00 阶段 4 退出标准解读）。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Live.Douyin\Erbai.Live.Douyin.csproj" />
+    <ProjectReference Include="..\..\src\Erbai.Modules.SongRequest\Erbai.Modules.SongRequest.csproj" />
+  </ItemGroup>
+</Project>
