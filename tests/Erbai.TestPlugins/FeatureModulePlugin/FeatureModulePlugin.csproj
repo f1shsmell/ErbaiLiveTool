@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Stage A 测试假插件：目录式插件的被加载方（验证 PluginLoader 的 ALC 加载 + 共享契约）。
+       仅引用 Erbai.Contracts —— 复刻第三方插件"只引宿主导出路径"的打包形态（docs/07 §4）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>FakeFeatureModule</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+</Project>

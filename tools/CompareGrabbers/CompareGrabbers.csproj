@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 阶段4 退出标准验收工具：新旧 Grabber 并行抓同一房间，比对 {Type,Data} 报文面（docs/04 §3.1）。
+       手动验收（需真实抖音直播间 + 浏览器）；自动化测试走 fake WS（tests/Erbai.Live.Douyin.Tests）。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Live.Douyin\Erbai.Live.Douyin.csproj" />
+  </ItemGroup>
+</Project>

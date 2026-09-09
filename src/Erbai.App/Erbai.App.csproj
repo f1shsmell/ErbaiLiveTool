@@ -1,0 +1,147 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WinUI 3 主程序：组合根。发布配方照抄 FufuLauncher（docs/05 §1，验证过的组合：
+       TFM 26100 + WASDK 2.2.0 + WinUIEx 2.9.1 + H.NotifyIcon 2.2.0）。 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Erbai.App</RootNamespace>
+    <AssemblyName>ErbaiLiveTool</AssemblyName>
+    <ApplicationIcon>Assets\AppLogo.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefaultLanguage>zh-CN</DefaultLanguage>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+
+    <!-- WinUI 3 / unpackaged（支持 requireAdministrator manifest） -->
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <!-- 发布形态（决策 #14/#17，决策史与取舍见 docs/02）：FDD（.NET 8 Desktop 运行时由安装器
+         自动部署）+ WinAppSDK 自带 + Inno Setup 安装器，安装包 ≤120MB。
+         多文件发布（PublishSingleFile=false）：曾因悬浮窗 lib_manual WebView2 与单文件 bundle
+         不兼容而改多文件；#17 预案 B 已弃用 WebView2 改自绘，单文件约束理论解除，保持多文件现状。
+         RTR 增重 ~24MB，不采用。 -->
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+
+  <!-- 悬浮窗（决策 #17 预案 B，2026-09 修订）：点歌/排队 = UpdateLayeredWindow + GDI+ 自绘；
+       弹幕 = WPF 方案（Erbai.OverlayWpf 库，bililive_dm 同款），细节见 docs/02 #17。 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.2.0" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />
+    <!-- 固定 Foundation 解析版本（AI/ML 传递依赖要求的 1.8.260501000 无精确匹配，消除 NU1603；与 WASDK 主包传递版本一致防降级） -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="1.8.260803002" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="WinUIEx" Version="2.9.1" />
+    <!-- 剔除 WASDK 附带 AI 推理负载（onnxruntime/DirectML ~40MB）：显式引用覆盖传递依赖并 ExcludeAssets -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="1.8.79" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.ML" Version="1.8.2197" ExcludeAssets="all" />
+  </ItemGroup>
+
+  <!-- ExcludeAssets 挡不住 WASDK 自包含解包的 MSIX AI 负载，须在载荷目标后按文件名
+       从拷贝列表剔除（WinUI 不激活这些 WinRT DLL，剔除安全）。 -->
+  <Target Name="StripWindowsAppSdkAiPayload" AfterTargets="AddMicrosoftWindowsAppSDKPayloadFilesFromMsix;AddMicrosoftWindowsAppSDKPayloadFilesFromComponents">
+    <ItemGroup>
+      <_WindowsAppSdkAiPayload Include="@(None)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', '^(onnxruntime[^.]*|DirectML)$|^Microsoft\.Windows\.AI\.|^Microsoft\.Windows\.Vision|^Microsoft\.Graphics\.Imaging|^Microsoft\.Windows\.SemanticSearch'))" />
+      <None Remove="@(_WindowsAppSdkAiPayload)" />
+    </ItemGroup>
+    <Message Text="已剔除 WASDK AI 负载文件数: @(_WindowsAppSdkAiPayload-&gt;Count())" Importance="high" />
+  </Target>
+
+  <!-- 开发调试：Grabber 产物拷到 App 输出目录 DouyinBarrageGrab/，宿主按该路径拉起。 -->
+  <Target Name="CopyGrabberOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_GrabberFiles Include="..\Erbai.Live.Douyin.Grabber\bin\$(Configuration)\net8.0-windows\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GrabberFiles)"
+          DestinationFiles="@(_GrabberFiles->'$(OutDir)DouyinBarrageGrab\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Text="已拷贝 Grabber 产物到 $(OutDir)DouyinBarrageGrab\" Importance="high" />
+  </Target>
+
+  <!-- 连接器宿主 exe（决策 #15）：构建后拷到 App 输出目录（profiles/、bridge/ 为
+       QQ 音乐画像与网易云 CEF bridge 内容文件，运行时按相对路径加载）。 -->
+  <Target Name="CopyConnectorOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_ConnectorFiles Include="..\Erbai.Connector\bin\$(Configuration)\net8.0\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ConnectorFiles)"
+          DestinationFiles="@(_ConnectorFiles->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Text="已拷贝连接器产物到 $(OutDir)（@(_ConnectorFiles-&gt;Count()) 个文件）" Importance="high" />
+  </Target>
+
+  <!-- 内置功能模块（决策 #4 修订）走目录式插件：queueup/giftfx 由 PluginLoader 从
+       Plugins/ 子目录加载（config.ini + 主 DLL）；此处仅保证构建顺序
+       （ReferenceOutputAssembly=false），DLL 与 config.ini 由拷贝钩子放入 Plugins/ 布局
+       （依赖经插件 ALC 宿主优先共享解析，无需随拷贝）。 -->
+  <Target Name="CopyBuiltinPluginsBuild" AfterTargets="Build">
+    <Copy SourceFiles="..\Erbai.Modules.QueueUp\bin\$(Configuration)\net8.0\Erbai.Modules.QueueUp.dll"
+          DestinationFolder="$(OutDir)Plugins\queueup\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\Erbai.Modules.GiftFx\bin\$(Configuration)\net8.0\Erbai.Modules.GiftFx.dll"
+          DestinationFolder="$(OutDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Plugins\queueup\config.ini" DestinationFolder="$(OutDir)Plugins\queueup\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Plugins\giftfx\config.ini" DestinationFolder="$(OutDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
+    <Message Text="已拷贝内置插件到 $(OutDir)Plugins\{queueup,giftfx}\" Importance="high" />
+  </Target>
+
+  <!-- 发布钩子：Plugins/ 布局独立拷到 publish 目录（安装器/zip 按真实目录打包）。 -->
+  <Target Name="CopyBuiltinPluginsPublish" AfterTargets="Publish">
+    <Copy SourceFiles="..\Erbai.Modules.QueueUp\bin\$(Configuration)\net8.0\Erbai.Modules.QueueUp.dll"
+          DestinationFolder="$(PublishDir)Plugins\queueup\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\Erbai.Modules.GiftFx\bin\$(Configuration)\net8.0\Erbai.Modules.GiftFx.dll"
+          DestinationFolder="$(PublishDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Plugins\queueup\config.ini" DestinationFolder="$(PublishDir)Plugins\queueup\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="Plugins\giftfx\config.ini" DestinationFolder="$(PublishDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
+    <Message Text="已拷贝内置插件到 $(PublishDir)Plugins\{queueup,giftfx}\" Importance="high" />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+    <ProjectReference Include="..\Erbai.Web\Erbai.Web.csproj" />
+    <ProjectReference Include="..\Erbai.Live.Bilibili\Erbai.Live.Bilibili.csproj" />
+    <ProjectReference Include="..\Erbai.Live.Douyin\Erbai.Live.Douyin.csproj" />
+    <!-- Grabber/连接器为独立子进程 exe（决策 #5/#15）：仅保证构建顺序
+         （ReferenceOutputAssembly=false），产物由拷贝钩子部署到 App 输出目录。 -->
+    <ProjectReference Include="..\Erbai.Live.Douyin.Grabber\Erbai.Live.Douyin.Grabber.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Erbai.Player.Connectors\Erbai.Player.Connectors.csproj" />
+    <ProjectReference Include="..\Erbai.Modules.SongRequest\Erbai.Modules.SongRequest.csproj" />
+    <!-- 弹幕悬浮窗（bililive_dm 同款，决策 #17 修订 2026-09）：WPF 方案独立库（code-only，规避
+         与 WinUI 3 的双 XAML 编译冲突），仅服务 Danmaku 悬浮窗；点歌/排队仍走 WinForms 自绘。 -->
+    <ProjectReference Include="..\Erbai.OverlayWpf\Erbai.OverlayWpf.csproj" />
+    <!-- 内置功能模块走目录式插件（决策 #4 修订）：仅保证构建顺序，主程序经 Contracts 接口访问。 -->
+    <ProjectReference Include="..\Erbai.Modules.QueueUp\Erbai.Modules.QueueUp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Erbai.Modules.GiftFx\Erbai.Modules.GiftFx.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 内置插件元数据（与上面拷贝钩子配套；Content 开发构建进输出，发布走 Publish 钩子） -->
+    <Content Include="Plugins\queueup\config.ini" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Plugins\giftfx\config.ini" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 应用图标（logo 2026-09-08）：ico 供 AppWindow.SetIcon 运行时加载（窗口/任务栏），
+         png 保留原始素材；随构建/发布进输出目录。exe 本身经 ApplicationIcon 内嵌图标。
+         TrayIcon.ico（2026-09-09）：系统托盘专用图标（用户提供素材生成 64x64）；
+         托盘走 System.Drawing.Icon 同步加载（BitmapImage 异步解码会出透明图标，见 MainWindow）。 -->
+    <Content Include="Assets\AppLogo.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\AppLogo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\TrayIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

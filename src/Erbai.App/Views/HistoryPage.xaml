@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.HistoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux">
+    <Page.Resources>
+        <!-- 历史页表格卡片：表头 + 列表 + 空态收进同一容器，
+             与全局卡片语言（圆角 8 / 描边 / 卡片底）对齐，列表不再"裸浮"在页面上 -->
+        <Style x:Key="TableCardBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="6" />
+        </Style>
+    </Page.Resources>
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 页首：标题居左、筛选工具栏居右（同一行两列，互不挤占） -->
+        <Grid Grid.Row="0" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="历史" Style="{StaticResource PageTitleTextStyle}" />
+                <TextBlock Text="点歌与排队的全部历史记录；可快速加入空闲歌单、拉黑歌曲、设为管理员" Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <ComboBox x:Name="SectionBox" MinWidth="130" SelectionChanged="OnSectionChanged">
+                    <ComboBoxItem Content="点歌历史" Tag="song" IsSelected="True" />
+                    <ComboBoxItem Content="排队历史" Tag="queueup" />
+                </ComboBox>
+                <ComboBox x:Name="SongStatusBox" MinWidth="110" SelectionChanged="OnSongStatusChanged">
+                    <ComboBoxItem Content="全部状态" Tag="" IsSelected="True" />
+                    <ComboBoxItem Content="已播" Tag="completed" />
+                    <ComboBoxItem Content="已跳过" Tag="skipped" />
+                    <ComboBoxItem Content="已取消" Tag="cancelled" />
+                    <ComboBoxItem Content="播放失败" Tag="failed" />
+                    <ComboBoxItem Content="已拒绝" Tag="rejected" />
+                </ComboBox>
+                <Button Click="OnRefreshClick" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE72C;" FontSize="13" />
+                        <TextBlock Text="刷新" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- 点歌历史列表（行 UI 在 code-behind 构建：本页两个列表若用 x:DataType DataTemplate
+             会触发 XamlCompiler（WASDK 1.8）WMC9999 codegen 崩溃，故采用 DanmakuLogPage 同款代码行模式）。
+             列宽（150/*/110/100/Auto）与 code-behind 行构建严格一致，表头与数据列不再错位。 -->
+        <Border Grid.Row="1" x:Name="SongSection" Style="{StaticResource TableCardBorderStyle}">
+            <Grid RowSpacing="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource TableHeaderBorderStyle}" Margin="0,0,0,2">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="时间" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="1" Text="歌曲" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="2" Text="点歌人" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="3" Text="状态" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="4" Text="操作" Style="{StaticResource CaptionTextStyle}" />
+                    </Grid>
+                </Border>
+                <Grid Grid.Row="1">
+                    <ListView x:Name="SongList" SelectionMode="Single">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="12,0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+                    <ux:EmptyState x:Name="SongEmptyState" Symbol="MusicInfo"
+                                   Title="暂无点歌记录"
+                                   Subtitle="直播间观众发送「点歌 歌名 - 歌手」后，所有点歌请求（含被拒绝的）都会出现在这里。" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 排队历史列表（同款表格卡片与列宽） -->
+        <Border Grid.Row="1" x:Name="QueueUpSection" Style="{StaticResource TableCardBorderStyle}" Visibility="Collapsed">
+            <Grid RowSpacing="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource TableHeaderBorderStyle}" Margin="0,0,0,2">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="时间" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="1" Text="内容" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="2" Text="观众" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="3" Text="状态" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="4" Text="操作" Style="{StaticResource CaptionTextStyle}" />
+                    </Grid>
+                </Border>
+                <Grid Grid.Row="1">
+                    <ListView x:Name="QueueUpList" SelectionMode="Single">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="12,0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+                    <ux:EmptyState x:Name="QueueUpEmptyState" Symbol="People"
+                                   Title="暂无排队记录"
+                                   Subtitle="观众「排队」后完成或取消的条目都会保留在这里。" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 页脚：操作反馈居左、分页居右（分页不再悬浮盖住最后一行数据） -->
+        <Grid Grid.Row="2" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusText" Style="{StaticResource CaptionTextStyle}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button x:Name="PrevPageButton" Click="OnPrevPage">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE76B;" FontSize="12" />
+                        <TextBlock Text="上一页" />
+                    </StackPanel>
+                </Button>
+                <TextBlock x:Name="PageText" Text="第 1 / 1 页" VerticalAlignment="Center"
+                           Style="{StaticResource CaptionTextStyle}" />
+                <Button x:Name="NextPageButton" Click="OnNextPage">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="下一页" />
+                        <FontIcon Glyph="&#xE76C;" FontSize="12" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

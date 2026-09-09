@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- DouyinBarrageGrab（ape-byte, MIT）源码迁移 .NET 8（阶段 4 定稿；Spike C 结论见 docs/06 §5）。
+       改动面（相对上游 net462）：去 WinForms UI（headless）、去 Costura.Fody（SDK 单文件原生支持）、
+       去死引用（BrotliSharpLib/BouncyCastle 顶层 using 无实际调用）、packages.config → PackageReference、
+       无 legacy XML 配置时走出厂默认值、Console.ReadKey 重定向输入崩溃修复、串口补 System.IO.Ports。
+       阶段 4 新增：宿主下发 19 键白名单 JSON（-config，未知键报错，见 HostConfig.cs）+ headless
+       结构化状态日志（stdout 的 [grabber-state] JSON 行，宿主解析）。MIT LICENSE 与 免责声明.txt
+       保留于本目录（随源分发；发布产物附 LICENSE）。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BarrageGrab</RootNamespace>
+    <AssemblyName>WssBarrageServer</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- 发布形态（阶段 4 定案）：随主应用发布的独立子进程 exe，单文件 + 框架依赖
+         （用户已装 .NET 8 Desktop Runtime，见决策 #14）。宿主按 App 目录
+         DouyinBarrageGrab/WssBarrageServer.exe 拉起。 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Fleck" Version="1.2.0" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <PackageReference Include="Jint" Version="4.16.0" />
+    <PackageReference Include="NLog" Version="6.2.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="protobuf-net" Version="3.4.14" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.1" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="Titanium.Web.Proxy" Version="3.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configs\nlog.config" />
+    <EmbeddedResource Include="Scripts\**\*.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="AppConfig.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- HostConfig 解析逻辑单测（Erbai.Live.Douyin.Tests 内） -->
+    <InternalsVisibleTo Include="Erbai.Live.Douyin.Tests" />
+  </ItemGroup>
+</Project>

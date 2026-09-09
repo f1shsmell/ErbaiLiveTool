@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 插件契约 + 规范化事件模型：被所有插件引用，零实现依赖（阶段 1 填充） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- 决策 #16 契约版本策略锚点：插件 config.ini 的 ContractVersion 与此
+         AssemblyVersion 比较（主版本必须一致且不得高于宿主，见 docs/07 §3）。
+         改契约的破坏性变更时同步升主版本。 -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+</Project>

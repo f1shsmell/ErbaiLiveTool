@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.QueueUpPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux"
+    xmlns:views="using:Erbai.App.Views">
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Spacing="2">
+            <TextBlock Text="排队队列" Style="{StaticResource PageTitleTextStyle}" />
+            <TextBlock Text="弹幕命令：排队 [内容] / 取消排队 / 完成（仅主播/管理员）" Style="{StaticResource CaptionTextStyle}" />
+        </StackPanel>
+
+        <!-- 统计 + 操作（观感打磨第二轮：孤立数字 → 统计数字对，与页首摘要区统一） -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="排队人数" Style="{StaticResource StatLabelTextStyle}" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock x:Name="CountText" Text="0" Style="{StaticResource StatNumberTextStyle}" />
+                    <TextBlock x:Name="CountMaxText" Text="/ -" Style="{StaticResource StatLabelTextStyle}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                </StackPanel>
+            </StackPanel>
+            <Button x:Name="CompleteNextButton" Content="完成队首" IsEnabled="False" Click="OnCompleteNext" VerticalAlignment="Center" Margin="12,0,0,0" />
+            <Button x:Name="CancelSelectedButton" Content="取消选中" IsEnabled="False" Click="OnCancelSelected" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- 列表 + 空态（观感打磨第二轮：统一 EmptyState 组件） -->
+        <Grid Grid.Row="2">
+            <ListView x:Name="QueueUpList" SelectionMode="Single" SelectionChanged="OnSelectionChanged">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0,4" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="views:QueueUpDisplay">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{x:Bind PositionText}" FontWeight="SemiBold" MinWidth="24" VerticalAlignment="Center" />
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind TitleText}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind SubText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <ux:EmptyState x:Name="QueueUpEmptyState" Symbol="People"
+                           Title="暂无排队"
+                           Subtitle="观众可发送「排队 内容」加入队列，主播/管理员可发送「完成」推进。" />
+        </Grid>
+    </Grid>
+</Page>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+    <!-- WPF 弹幕悬浮窗（bililive_dm 同款）库的传递引用解析 -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Erbai.OverlayWpf\Erbai.OverlayWpf.csproj" />
+  </ItemGroup>
+  <!-- 渲染器源文件链接编译（不引用 WinUI3 App 程序集，避免 WASDK MSIX/PriGen 打包目标
+       干扰测试构建）；GDI+ 渲染逻辑与 App 共享同一份源码 -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Erbai.App\Overlay\OverlayRenderers.cs" Link="Overlay\OverlayRenderers.cs" />
+    <Compile Include="..\..\src\Erbai.App\Views\LogFileTail.cs" Link="Views\LogFileTail.cs" />
+    <Compile Include="..\..\src\Erbai.App\CloseToTray.cs" Link="CloseToTray.cs" />
+  </ItemGroup>
+</Project>

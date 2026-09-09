@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 内核：事件总线 / 模块宿主 / SQLite 存储 / 配置 / 日志，无 UI 依赖（阶段 1 填充） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.30" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 测试专用：允许 Erbai.Core.Tests 直接单测 SqliteExecutor（关闭竞态修复） -->
+    <InternalsVisibleTo Include="Erbai.Core.Tests" />
+  </ItemGroup>
+</Project>

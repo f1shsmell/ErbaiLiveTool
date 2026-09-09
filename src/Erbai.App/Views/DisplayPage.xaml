@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.DisplayPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 显示与悬浮窗（2026-09 布局重构）：三类悬浮窗 + Overlay 设置收进四个 tab，
+         避免三张大卡纵向堆叠的长滚动；色盘收进 Flyout（色块按钮触发），
+         样式区只占一行色块 + 双列滑杆；新增「文字颜色」与强调色分离可调。 -->
+    <Page.Resources>
+        <!-- 整页容器卡：与 CardBorderStyle 同语言但不挂悬停缩放（大卡缩放会晃眼） -->
+        <Style x:Key="PanelBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,24" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Spacing="2">
+            <TextBlock Text="显示与悬浮窗" Style="{StaticResource PageTitleTextStyle}" />
+            <TextBlock Text="Overlay 浏览器源地址与三类悬浮窗的尺寸、透明度、置顶与样式；改动即时生效" Style="{StaticResource CaptionTextStyle}" />
+        </StackPanel>
+
+        <Pivot Grid.Row="1" x:Name="DisplayTabs">
+
+            <!-- ============ 点歌悬浮窗 ============ -->
+            <PivotItem Header="点歌悬浮窗">
+                <ScrollViewer>
+                    <StackPanel Spacing="12" MaxWidth="860" HorizontalAlignment="Left" Padding="0,4,12,16">
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="通用" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Text="窗口内实时展示当前播放与待播歌曲" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ToggleSwitch Grid.Column="0" x:Name="SongQueueEnabledToggle" Header="启用" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="SongQueueTopmostToggle" Header="置顶" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="2" x:Name="SongQueueThroughToggle" Header="穿透" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                </Grid>
+                                <!-- 宽高全自适应（2026-09 用户需求）：不再提供宽高滑块与自适应开关，
+                                     窗口尺寸随内容实测（右下角锚定，向左上生长）；位置拖动后退出时记住。 -->
+                                <TextBlock Text="窗口宽高随内容自动伸缩；关闭「穿透」后可直接拖动窗口摆放位置，下次启动保持原位"
+                                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="样式" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="SongQueueAccentButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="SongQueueAccentChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="强调色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="SongQueueAccentPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <Button x:Name="SongQueueTextButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="SongQueueTextChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="文字颜色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="SongQueueTextPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <!-- 字体（2026-09 用户需求）：点歌/排队原字体硬编码，现与弹幕一致可选 -->
+                                    <Grid ColumnSpacing="10" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="字体" VerticalAlignment="Center" FontSize="13" />
+                                        <ComboBox x:Name="SongQueueFontFamilyBox" Grid.Column="1" SelectionChanged="OnOverlayStyleChanged" />
+                                    </Grid>
+                                </StackPanel>
+                                <Grid ColumnSpacing="16" RowSpacing="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Slider Grid.Row="0" Grid.Column="0" x:Name="SongQueueFontScaleSlider" Header="字号（0.6×–5×）" Minimum="0.6" Maximum="5" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="0" Grid.Column="1" x:Name="SongQueueOutlineSlider" Header="文字描边" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="0" x:Name="SongQueueGlowSlider" Header="文字发光" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="1" x:Name="SongQueueOpacitySlider" Header="不透明度" Minimum="0.5" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="2" Grid.Column="0" x:Name="SongQueueBackgroundSlider" Header="玻璃面板底（0=无底全透明）" Minimum="0" Maximum="0.95" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                </Grid>
+                                <Button Content="恢复默认" Tag="songqueue" Click="OnResetOverlayStyle" HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <!-- ============ 排队悬浮窗 ============ -->
+            <PivotItem Header="排队悬浮窗">
+                <ScrollViewer>
+                    <StackPanel Spacing="12" MaxWidth="860" HorizontalAlignment="Left" Padding="0,4,12,16">
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="通用" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Text="窗口内实时展示互动排队看板" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ToggleSwitch Grid.Column="0" x:Name="QueueUpEnabledToggle" Header="启用" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="QueueUpTopmostToggle" Header="置顶" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="2" x:Name="QueueUpThroughToggle" Header="穿透" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                </Grid>
+                                <!-- 宽高全自适应（2026-09 用户需求）：理由同点歌页签 -->
+                                <TextBlock Text="窗口宽高随内容自动伸缩；关闭「穿透」后可直接拖动窗口摆放位置，下次启动保持原位"
+                                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="样式" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="QueueUpAccentButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="QueueUpAccentChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="强调色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="QueueUpAccentPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <Button x:Name="QueueUpTextButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="QueueUpTextChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="文字颜色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="QueueUpTextPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <!-- 字体（2026-09 用户需求）：与点歌/弹幕一致可选 -->
+                                    <Grid ColumnSpacing="10" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="字体" VerticalAlignment="Center" FontSize="13" />
+                                        <ComboBox x:Name="QueueUpFontFamilyBox" Grid.Column="1" SelectionChanged="OnOverlayStyleChanged" />
+                                    </Grid>
+                                </StackPanel>
+                                <Grid ColumnSpacing="16" RowSpacing="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Slider Grid.Row="0" Grid.Column="0" x:Name="QueueUpFontScaleSlider" Header="字号（0.6×–5×）" Minimum="0.6" Maximum="5" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="0" Grid.Column="1" x:Name="QueueUpOutlineSlider" Header="文字描边" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="0" x:Name="QueueUpGlowSlider" Header="文字发光" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="1" x:Name="QueueUpOpacitySlider" Header="不透明度" Minimum="0.5" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="2" Grid.Column="0" x:Name="QueueUpBackgroundSlider" Header="玻璃面板底（0=无底全透明）" Minimum="0" Maximum="0.95" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                </Grid>
+                                <Button Content="恢复默认" Tag="queueup" Click="OnResetOverlayStyle" HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <!-- ============ 弹幕悬浮窗 ============ -->
+            <PivotItem Header="弹幕悬浮窗">
+                <ScrollViewer>
+                    <StackPanel Spacing="12" MaxWidth="860" HorizontalAlignment="Left" Padding="0,4,12,16">
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="通用" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                    <TextBlock Text="窗口内实时滚动弹幕（支持动画节奏与粉丝团徽章）" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ToggleSwitch Grid.Column="0" x:Name="DanmakuEnabledToggle" Header="启用" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="1" x:Name="DanmakuTopmostToggle" Header="置顶" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                    <ToggleSwitch Grid.Column="2" x:Name="DanmakuThroughToggle" Header="穿透" OnContent="" OffContent="" Toggled="OnOverlayWindowToggled" />
+                                </Grid>
+                                <!-- 弹幕窗不做宽高自适应（2026-09 用户拍板）：弹幕行靠窗宽换行，
+                                     宽度随内容会与换行形成循环依赖，故宽度用内置默认、高度随活跃行数伸缩 -->
+                                <TextBlock Text="窗口宽度固定（弹幕按宽度换行），高度随弹幕行数自动伸缩；关闭「穿透」后可直接拖动摆放位置，下次启动保持原位"
+                                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="样式" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="DanmakuAccentButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="DanmakuAccentChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="强调色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="DanmakuAccentPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <Button x:Name="DanmakuTextButton" Style="{StaticResource InlineActionButtonStyle}" Padding="8,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border x:Name="DanmakuTextChip" Width="20" Height="20" CornerRadius="4"
+                                                    BorderBrush="{ThemeResource TextFillColorSecondaryBrush}" BorderThickness="1" />
+                                            <TextBlock Text="文字颜色" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <Button.Flyout>
+                                            <Flyout Placement="Bottom">
+                                                <ColorPicker x:Name="DanmakuTextPicker" ColorSpectrumShape="Box"
+                                                             IsAlphaEnabled="False" IsMoreButtonVisible="False"
+                                                             IsColorChannelTextInputVisible="False"
+                                                             ColorChanged="OnOverlayStyleChanged" />
+                                            </Flyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <Grid ColumnSpacing="10" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="180" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="字体" VerticalAlignment="Center" FontSize="13" />
+                                        <ComboBox x:Name="DanmakuFontFamilyBox" Grid.Column="1" SelectionChanged="OnOverlayStyleChanged" />
+                                    </Grid>
+                                </StackPanel>
+                                <Grid ColumnSpacing="16" RowSpacing="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Slider Grid.Row="0" Grid.Column="0" x:Name="DanmakuFontScaleSlider" Header="字号（0.6×–5×）" Minimum="0.6" Maximum="5" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="0" Grid.Column="1" x:Name="DanmakuOutlineSlider" Header="文字描边" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="0" x:Name="DanmakuGlowSlider" Header="文字发光" Minimum="0" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="1" x:Name="DanmakuOpacitySlider" Header="不透明度" Minimum="0.5" Maximum="1" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="2" Grid.Column="0" x:Name="DanmakuBackgroundSlider" Header="弹幕行底条（0=无底全透明）" Minimum="0" Maximum="0.95" StepFrequency="0.05" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="2" Grid.Column="1" x:Name="DanmakuMaxLinesSlider" Header="弹幕行数上限" Minimum="10" Maximum="100" StepFrequency="5" ValueChanged="OnOverlayStyleChanged" />
+                                </Grid>
+                                <TextBlock Text="动画节奏（bililive_dm 同款四段）" Style="{StaticResource CaptionTextStyle}" />
+                                <Grid ColumnSpacing="16" RowSpacing="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Slider Grid.Row="0" Grid.Column="0" x:Name="DanmakuExpandSlider" Header="拉伸动画（秒）" Minimum="0.1" Maximum="3" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="0" Grid.Column="1" x:Name="DanmakuTextInSlider" Header="文字出现（秒）" Minimum="0.1" Maximum="3" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="0" x:Name="DanmakuHoldSlider" Header="停留（秒）" Minimum="0" Maximum="30" StepFrequency="0.5" ValueChanged="OnOverlayStyleChanged" />
+                                    <Slider Grid.Row="1" Grid.Column="1" x:Name="DanmakuFadeSlider" Header="淡出（秒）" Minimum="0.1" Maximum="5" StepFrequency="0.1" ValueChanged="OnOverlayStyleChanged" />
+                                </Grid>
+                                <Button Content="恢复默认" Tag="danmaku" Click="OnResetOverlayStyle" HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <!-- ============ Overlay 设置 ============ -->
+            <PivotItem Header="Overlay 设置">
+                <ScrollViewer>
+                    <StackPanel Spacing="12" MaxWidth="860" HorizontalAlignment="Left" Padding="0,4,12,16">
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Overlay（OBS 浏览器源 / 悬浮窗页面）" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock x:Name="OverlayUrlText" Text="-" IsTextSelectionEnabled="True" FontSize="13" VerticalAlignment="Center" />
+                                    <Button x:Name="CopyOverlayUrlButton" Content="复制" Style="{StaticResource InlineActionButtonStyle}" Click="OnCopyOverlayUrl" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource PanelBorderStyle}">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="使用说明" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}"
+                                           Text="· 把上方地址填入 OBS 的「浏览器源」即可在直播画面叠加网页版悬浮窗；&#10;· 本机悬浮窗（点歌 / 排队 / 弹幕三个页签）的开关、尺寸与样式改动即时生效并持久化；&#10;· 强调色作用于色条 / 徽章 / 光晕等点缀，文字颜色独立调节正文。" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
+    </Grid>
+</Page>

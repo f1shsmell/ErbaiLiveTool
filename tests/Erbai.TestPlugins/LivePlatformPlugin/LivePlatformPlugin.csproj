@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Stage A 测试假插件：直播平台类假插件（仅引用 Erbai.Contracts，复刻第三方打包形态）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>FakeLivePlatform</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+</Project>

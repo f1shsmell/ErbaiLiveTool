@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- B站弹幕插件：blivedm 协议 C# 移植 + 扫码登录 + DPAPI 凭据（阶段 3） -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Core\Erbai.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 测试专用：允许 Erbai.Live.Bilibili.Tests 访问 internal（correspond_path 等） -->
+    <InternalsVisibleTo Include="Erbai.Live.Bilibili.Tests" />
+  </ItemGroup>
+</Project>

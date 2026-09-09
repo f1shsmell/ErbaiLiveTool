@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 弹幕悬浮窗（bililive_dm 同款方案，2026-09）：code-only WPF（无 .xaml），WinUI 3 主程序
+       同进程共存——窗口跑独立 STA 线程 + WPF Dispatcher，规避双 XAML 编译冲突。
+       仅服务弹幕悬浮窗；点歌/排队悬浮窗仍走 Erbai.App 的 WinForms 自绘（决策 #17 预案 B）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWPF>true</UseWPF>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <RootNamespace>Erbai.OverlayWpf</RootNamespace>
+    <AssemblyName>Erbai.OverlayWpf</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Erbai.App.Tests" />
+  </ItemGroup>
+</Project>

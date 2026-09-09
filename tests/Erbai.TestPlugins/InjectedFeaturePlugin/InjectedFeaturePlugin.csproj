@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Stage A 测试假插件：带参构造（宿主服务注入）——验证 PluginLoader 的 ServiceResolver 构造解析
+       与跨 ALC 共享契约强转（IStorageEngine 参数为 Contracts 类型）。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>FakeInjectedFeatureModule</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+</Project>
