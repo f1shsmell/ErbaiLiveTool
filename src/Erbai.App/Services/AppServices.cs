@@ -1,3 +1,6 @@
+using Erbai.Connectors.Management;
+using Erbai.Connectors.Management.Catalog;
+using Erbai.Connectors.Management.Runtime;
 using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Logging;
@@ -40,13 +43,21 @@ public sealed class AppServices : IAsyncDisposable
     private IQueueUpModule? _queueUp;
 
     private AppServices(ServiceProvider provider, ConnectorPlayerPlugin? player,
-        IQueueUpModule? queueUp, CancellationTokenSource bridgeCts, LiveEventLogWriter? liveLog)
+        IQueueUpModule? queueUp, CancellationTokenSource bridgeCts, LiveEventLogWriter? liveLog,
+        PlayerConnectorResolver connectorPlayerResolver, ConnectorMaintenance connectorMaintenance,
+        ConnectorInstallLayout connectorLayout, ConnectorInstaller connectorInstaller,
+        ConnectorCatalogClient connectorCatalog)
     {
         _provider = provider;
         _player = player;
         _queueUp = queueUp;
         _bridgeCts = bridgeCts;
         _liveLog = liveLog;
+        ConnectorPlayerResolver = connectorPlayerResolver;
+        ConnectorMaintenance = connectorMaintenance;
+        ConnectorLayout = connectorLayout;
+        ConnectorInstaller = connectorInstaller;
+        ConnectorCatalog = connectorCatalog;
     }
 
     public EventBus Bus => _provider.GetRequiredService<EventBus>();
@@ -67,6 +78,32 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>连接器播放器（连接器 exe 缺失时为 null，队列走 fallback 时长；设置页切换播放器时热替换）。</summary>
     public ConnectorPlayerPlugin? Player { get => _player; private set => _player = value; }
+
+    /// <summary>player key → 连接器启动参数（内置 lxmusic / 已安装插件）。</summary>
+    public PlayerConnectorResolver ConnectorPlayerResolver { get; }
+
+    /// <summary>
+    /// 连接器插件维护：状态采集 + 按 D5 边界自动更新 + 30 分钟周期轮询。
+    /// 设置页/插件页的安装与更新按钮都走它。
+    /// </summary>
+    public ConnectorMaintenance ConnectorMaintenance { get; }
+
+    /// <summary>
+    /// 连接器安装目录布局（插件页展示安装根路径、"打开连接器目录"用）。
+    /// </summary>
+    public ConnectorInstallLayout ConnectorLayout { get; }
+
+    /// <summary>
+    /// 连接器安装器。插件页的"从本地 ZIP 安装"（决策 D6）直接走它——与在线安装同一条管线
+    /// （校验 → 解压 → 健康检查 → 原子替换），失败回滚语义也一致。
+    /// </summary>
+    public ConnectorInstaller ConnectorInstaller { get; }
+
+    /// <summary>
+    /// 连接器清单客户端。本地 ZIP 安装时用它按资产名反查清单条目，
+    /// 从而走完整的 size + SHA-256 + Ed25519 校验（而不是退化成"未校验安装"）。
+    /// </summary>
+    public ConnectorCatalogClient ConnectorCatalog { get; }
 
     public OverlayServer? Overlay => _provider.GetService<OverlayServer>();
 
@@ -253,6 +290,45 @@ public sealed class AppServices : IAsyncDisposable
             ServiceResolver = type => sp.GetService(type),
         }));
 
+        // 连接器插件管理（插件化改造）：lxmusic 仍由随包发布的 Erbai.Connector.exe 提供；
+        // netease/kugou/qqmusic/folia 改由第三方连接器插件提供，由本套组件负责
+        // 清单校验 → 下载 → 签名校验 → 解压 → 私有运行时 → 健康检查 → 激活。
+        services.AddSingleton(new ConnectorInstallLayout());
+        services.AddSingleton(new PrivateDotnetRuntimeLayout());
+        services.AddSingleton(sp => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
+        services.AddSingleton(sp => new PrivateDotnetRuntimeManager(
+            sp.GetRequiredService<PrivateDotnetRuntimeLayout>(),
+            sp.GetRequiredService<HttpClient>(),
+            message => sp.GetRequiredService<ILogBus>().Log(LogLevel.Information, message)));
+        services.AddSingleton<IPrivateRuntimeProvider>(sp => sp.GetRequiredService<PrivateDotnetRuntimeManager>());
+
+        // 运行时根必须落在该 rid 的私有目录内——P2 预留的注入校验在这里闭合，
+        // 让"active.json 被手工改指向别处"无法把连接器引到任意 dotnet.exe 上。
+        services.AddSingleton<IConnectorStore>(sp => new ConnectorStore(
+            sp.GetRequiredService<ConnectorInstallLayout>(),
+            sp.GetRequiredService<PrivateDotnetRuntimeManager>().IsAcceptableRuntimeRoot));
+
+        services.AddSingleton(sp => new ConnectorDownloader(sp.GetRequiredService<HttpClient>()));
+        services.AddSingleton<IConnectorHealthChecker>(_ => new ConnectorHealthChecker());
+        services.AddSingleton(sp => new ConnectorInstaller(
+            sp.GetRequiredService<ConnectorInstallLayout>(),
+            sp.GetRequiredService<IConnectorStore>(),
+            sp.GetRequiredService<ConnectorDownloader>(),
+            sp.GetRequiredService<IConnectorHealthChecker>(),
+            message => sp.GetRequiredService<ILogBus>().Log(LogLevel.Information, message),
+            sp.GetRequiredService<IPrivateRuntimeProvider>()));
+        services.AddSingleton(sp => new ConnectorCatalogClient(sp.GetRequiredService<HttpClient>()));
+        services.AddSingleton(sp => new ConnectorMaintenance(
+            sp.GetRequiredService<ConnectorCatalogClient>(),
+            sp.GetRequiredService<ConnectorInstaller>(),
+            sp.GetRequiredService<IConnectorStore>(),
+            log: message => sp.GetRequiredService<ILogBus>().Log(LogLevel.Information, message)));
+        services.AddSingleton(sp => new PlayerConnectorResolver(
+            sp.GetRequiredService<ConnectorInstallLayout>(),
+            sp.GetRequiredService<IConnectorStore>(),
+            baseDir,
+            message => sp.GetRequiredService<ILogBus>().Log(LogLevel.Warning, message)));
+
         services.AddSingleton(sp => new PlatformSupervisor(sp.GetRequiredService<ILogBus>()));
         services.AddSingleton(sp =>
             new OverlayWindowManager(
@@ -271,20 +347,27 @@ public sealed class AppServices : IAsyncDisposable
         var commands = provider.GetRequiredService<SongRequestService>();
         var userService = provider.GetRequiredService<UserService>();
 
-        // 连接器播放器（连接器 exe 随应用发布；缺失时静默降级）。
-        // 播放器类型/参数从配置读取（player.key + lxmusic.* + folia_token），
-        // 经环境变量注入子进程（连接器侧 *Options.FromEnvironment() 读取）。
+        // 连接器播放器。插件化改造后连接器有两个来源：lxmusic 由随包发布的
+        // Erbai.Connector.exe 提供，其余四平台由已安装的第三方插件提供——
+        // 具体路径与环境变量由 PlayerConnectorResolver 统一解析（只读盘、不联网）。
+        // 未安装时静默降级（队列走估算时长），并在设置页/插件页给出下载指引。
+        var connectorResolver = provider.GetRequiredService<PlayerConnectorResolver>();
+        var connectorMaintenance = provider.GetRequiredService<ConnectorMaintenance>();
+
         ConnectorPlayerPlugin? player = null;
-        var connectorExe = ResolveConnectorExe(settings.Player.ConnectorDir, baseDir);
         Task<PlayerSnapshot>? playerActivation = null;
-        if (File.Exists(connectorExe))
+        PlayerConnectorResolution resolution = connectorResolver.Resolve(
+            settings.Player.Key,
+            BuildConnectorEnvironment(settings.Player),
+            settings.Player.FoliaToken);
+
+        if (resolution.IsUsable)
         {
-            var playerKey = settings.Player.Key;
             player = new ConnectorPlayerPlugin(
-                new ConnectorClient(connectorExe, playerKey, BuildConnectorEnvironment(settings.Player)),
-                PlayerDisplayNames.GetValueOrDefault(playerKey, playerKey));
+                new ConnectorClient(resolution.ExecutablePath!, resolution.PlayerKey, resolution.Environment),
+                resolution.DisplayName);
             queue.Player = player;
-            // 连接器激活（启动 Erbai.Connector.exe 子进程并握手，可能耗时不短）：
+            // 连接器激活（启动连接器子进程并握手，可能耗时不短）：
             // 不在此处 await，而是与下方插件加载/模块启动并行（见 WhenAll 汇合点），
             // 首窗更快出现。
             try
@@ -294,8 +377,13 @@ public sealed class AppServices : IAsyncDisposable
             catch (Exception ex)
             {
                 logs.Log(Erbai.Contracts.Logging.LogLevel.Warning,
-                    $"{playerKey} 连接器激活失败（继续运行）：{ex.Message}");
+                    $"{resolution.PlayerKey} 连接器激活失败（继续运行）：{ex.Message}");
             }
+        }
+        else
+        {
+            logs.Log(Erbai.Contracts.Logging.LogLevel.Warning,
+                $"{resolution.PlayerKey} 连接器不可用，点歌将按估算时长播放：{resolution.Detail}");
         }
 
         // 事件桥接（B站/抖音通用）+ 抖音用户持久化同步
@@ -464,7 +552,17 @@ public sealed class AppServices : IAsyncDisposable
             logs.Log(Erbai.Contracts.Logging.LogLevel.Warning, $"悬浮窗初始应用失败（继续运行）：{ex.Message}");
         }
 
-        var app = new AppServices(provider, player, queueUp, bridgeCts, liveLog);
+        var app = new AppServices(
+            provider, player, queueUp, bridgeCts, liveLog,
+            connectorResolver, connectorMaintenance,
+            provider.GetRequiredService<ConnectorInstallLayout>(),
+            provider.GetRequiredService<ConnectorInstaller>(),
+            provider.GetRequiredService<ConnectorCatalogClient>());
+
+        // 连接器插件后台维护（30 分钟一轮）。刻意放在启动序列末尾、且首轮 dueTime = 周期：
+        // 启动瞬间不联网、不与首窗抢磁盘与网络；此后每轮只在有"可自动应用的更新"时才下载。
+        // 关停由 AppServices.DisposeAsync 负责。
+        connectorMaintenance.Start();
         app._moduleContext = moduleContext; // 插件热启用（SetEnabledAsync）复用
         logs.Log(Erbai.Contracts.Logging.LogLevel.Information,
             $"组合根装配完成：overlay={app.OverlayUrl} 播放器={player?.Key ?? "(无)"} " +
@@ -474,43 +572,25 @@ public sealed class AppServices : IAsyncDisposable
         return app;
     }
 
-    /// <summary>连接器 exe 路径：ConnectorDir 配置优先（空 = 应用目录）。</summary>
-    private static string ResolveConnectorExe(string connectorDir, string baseDir) =>
-        string.IsNullOrWhiteSpace(connectorDir)
-            ? Path.Combine(baseDir, "Erbai.Connector.exe")
-            : Path.Combine(connectorDir, "Erbai.Connector.exe");
-
     /// <summary>
-    /// 播放器配置 → 连接器子进程环境变量（连接器侧经 *Options.FromEnvironment()
-    /// 读取；不落盘）。Folia token 与 lxmusic 开关均由此注入。
+    /// 播放器配置 → <b>内置连接器（lxmusic）</b>的子进程环境变量（连接器侧经
+    /// <c>*Options.FromEnvironment()</c> 读取；不落盘）。
     /// </summary>
+    /// <remarks>
+    /// 只负责 lxmusic 的那几个 <c>LX_*</c> 开关。Folia token 不在这里——
+    /// 它属于 folia 插件，由 <see cref="PlayerConnectorResolver"/> 在解析插件时注入，
+    /// 免得把凭据塞进一个"给所有连接器都用"的环境字典里。
+    /// </remarks>
     private static IReadOnlyDictionary<string, string> BuildConnectorEnvironment(PlayerConfig player)
     {
-        var env = new Dictionary<string, string>(StringComparer.Ordinal)
+        return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["LX_HTTP_URL"] = player.Lxmusic.HttpUrl,
             ["LX_HTTP_ENABLED"] = player.Lxmusic.HttpEnabled ? "true" : "false",
             ["LX_SSE_ENABLED"] = player.Lxmusic.SseEnabled ? "true" : "false",
             ["LX_USE_HTTP_CONTROL"] = player.Lxmusic.UseHttpControl ? "true" : "false",
         };
-        if (!string.IsNullOrWhiteSpace(player.FoliaToken))
-        {
-            env["BILINCM_FOLIA_TOKEN"] = player.FoliaToken;
-        }
-
-        return env;
     }
-
-    /// <summary>player.key → 概览页/日志显示名。</summary>
-    private static IReadOnlyDictionary<string, string> PlayerDisplayNames { get; } =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["lxmusic"] = "落雪音乐",
-            ["netease"] = "网易云音乐",
-            ["kugou"] = "酷狗音乐",
-            ["qqmusic"] = "QQ音乐",
-            ["folia"] = "Folia",
-        };
 
     private static int ParseWsPort(string wsUrl)
     {
@@ -538,13 +618,24 @@ public sealed class AppServices : IAsyncDisposable
     /// 切换音乐播放器连接器：新连接器先激活成功再接管（失败保持原状不中断点歌）。
     /// 正在播放的歌曲随旧连接器释放而按失败跳过，下一首起走新播放器。
     /// </summary>
+    /// <remarks>
+    /// 目标连接器未安装时<b>不切换</b>，而是返回带下载指引的说明（决策 D-D）——
+    /// 静默切成一个拉不起来的播放器比留在旧播放器上糟糕得多。
+    /// </remarks>
     public async Task<string> SwitchPlayerAsync(string playerKey)
     {
         var settings = Config.Settings;
-        var connectorExe = ResolveConnectorExe(settings.Player.ConnectorDir, AppPaths.HostDir);
-        if (!File.Exists(connectorExe))
+        PlayerConnectorResolution resolution = ConnectorPlayerResolver.Resolve(
+            playerKey,
+            BuildConnectorEnvironment(settings.Player),
+            settings.Player.FoliaToken);
+
+        if (!resolution.IsUsable)
         {
-            return $"未找到 {connectorExe}，播放器未切换";
+            Logs.Log(Erbai.Contracts.Logging.LogLevel.Warning,
+                $"播放器 {playerKey} 不可用，未切换：{resolution.Detail}");
+
+            return $"{resolution.DisplayName} 连接器不可用，播放器未切换：{resolution.Detail}";
         }
 
         var old = Player;
@@ -552,8 +643,8 @@ public sealed class AppServices : IAsyncDisposable
         try
         {
             next = new ConnectorPlayerPlugin(
-                new ConnectorClient(connectorExe, playerKey, BuildConnectorEnvironment(settings.Player)),
-                PlayerDisplayNames.GetValueOrDefault(playerKey, playerKey));
+                new ConnectorClient(resolution.ExecutablePath!, resolution.PlayerKey, resolution.Environment),
+                resolution.DisplayName);
             await next.ActivateAsync(settings, CancellationToken.None);
         }
         catch (Exception ex)
@@ -687,6 +778,10 @@ public sealed class AppServices : IAsyncDisposable
 
         _bridgeCts.Cancel();
         _bridgeCts.Dispose();
+
+        // 先停连接器后台维护：它会在后台发起下载/解压，必须在进程退出前停掉，
+        // 否则可能在磁盘写入中途被强杀，留下 staging 残留。
+        ConnectorMaintenance.Dispose();
 
         // 先停功能模块（QueueUp/GiftFx 消费者 + 目录式插件已随 StartAllAsync 注册进同一宿主）
         await Modules.StopAllAsync();

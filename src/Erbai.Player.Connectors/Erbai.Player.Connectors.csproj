@@ -1,15 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- 主程序侧连接器客户端（决策 #15）：NDJSON-stdio 协议客户端 + 连接器子进程管理
        （拉起/ping、退出与超时重启、shutdown、垃圾行容忍），按 key 产出五个 IMusicPlayerPlugin。
-       子进程 = Erbai.Connector 宿主 exe（协议见 docs/04 §1.4）。阶段 2 随 lxmusic 落地。 -->
+       子进程 = Erbai.Connector 宿主 exe（协议见 docs/04 §1.4）。阶段 2 随 lxmusic 落地。
+       连接器插件化改造后：lxmusic 仍由本仓库的 Erbai.Connector.exe 提供；
+       netease/kugou/qqmusic/folia 改由第三方连接器插件提供，因此这里要依赖
+       Erbai.Connectors.Management 来解析"装在哪、怎么起"（见 PlayerConnectorResolver）。 -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+    <ProjectReference Include="..\Erbai.Connectors.Management\Erbai.Connectors.Management.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- 测试专用：允许 Erbai.Connector.Tests 访问 internal（子进程句柄等） -->
     <InternalsVisibleTo Include="Erbai.Connector.Tests" />
+    <!-- 探针工具复用 DeriveCapabilities（能力面口径只能有一份，见 tools/ProbeConnector） -->
+    <InternalsVisibleTo Include="Erbai.ProbeConnector" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- 连接器宿主 exe（子进程，决策 #15）：NDJSON-stdio 服务端循环 + 五平台连接器实现
-       （lxmusic 三通道 / netease CEF / kugou / qqmusic / folia），按请求 player 字段路由。
-       机制与数值参考旧实现（04 §1.3-1.4），代码表达沿用上游。阶段 2 先落 lxmusic。 -->
+  <!-- 连接器宿主 exe（子进程，决策 #15）：NDJSON-stdio 服务端循环 + lxmusic 原生后端。
+       网易云 / 酷狗 / QQ 音乐 / Folia 已插件化（用户按清单安装上游第三方连接器 exe），
+       不再由本工程实现，也不再随包分发其 bridge/profiles 资产。
+       机制与数值参考旧实现（04 §1.3-1.4），代码表达沿用上游。 -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
@@ -10,14 +11,5 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- QQ 音乐版本画像（22.52 等外置 JSON，运行时加载；内置 22.22/22.41 在代码里） -->
-    <Content Include="profiles\qqmusic\*.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- 网易云 CEF bridge（native 机制载体，用户 2026-08-26 拍板复用 vendor 二进制，
-         C# 面照搬上游；不入 vendor/，随应用发布） -->
-    <Content Include="bridge\AwooNcmCefBridge.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

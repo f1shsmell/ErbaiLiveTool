@@ -6,7 +6,13 @@ namespace Erbai.Player.Connectors;
 /// <summary>响应快照 JSON → PlayerSnapshot（camelCase 线格式 + nextSource/rawStatus）。</summary>
 internal static class SnapshotParser
 {
-    public static PlayerSnapshot Parse(JsonElement? element)
+    /// <param name="defaultPlatform">
+    /// 连接器未在曲目里给出 platform 时的兜底平台键（= 连接器的 PlayerKey）。
+    /// 上游 awoo 连接器的 search 结果与快照曲目都<b>不带</b> platform 字段，
+    /// 不兜底会得到空串（PlayerTrack.Platform 是 required，空串会让下游
+    /// 无法判断来源平台）。
+    /// </param>
+    public static PlayerSnapshot Parse(JsonElement? element, string? defaultPlatform = null)
     {
         if (element is not { ValueKind: JsonValueKind.Object } obj)
         {
@@ -19,8 +25,8 @@ internal static class SnapshotParser
 
         var connected = obj.TryGetProperty("connected", out var c) && c.ValueKind == JsonValueKind.True;
         var version = GetString(obj, "version");
-        var current = GetTrack(obj, "current");
-        var next = GetTrack(obj, "next");
+        var current = GetTrack(obj, "current", defaultPlatform);
+        var next = GetTrack(obj, "next", defaultPlatform);
         var nextSource = ConnectorProtocol.ParseNextSource(GetString(obj, "nextSource"));
         var rawStatus = GetString(obj, "rawStatus");
         double? progress = obj.TryGetProperty("progressSeconds", out var p) && p.TryGetDouble(out var pv)
@@ -39,7 +45,7 @@ internal static class SnapshotParser
         };
     }
 
-    internal static PlayerTrack? DeserializeTrack(JsonElement element)
+    internal static PlayerTrack? DeserializeTrack(JsonElement element, string? defaultPlatform = null)
     {
         if (element.ValueKind != JsonValueKind.Object)
         {
@@ -48,7 +54,7 @@ internal static class SnapshotParser
 
         return new PlayerTrack
         {
-            Platform = GetString(element, "platform") ?? "",
+            Platform = ResolvePlatform(element, defaultPlatform),
             Id = GetString(element, "id") ?? "",
             Title = GetString(element, "title") ?? "",
             Artist = GetString(element, "artist") ?? "",
@@ -61,7 +67,14 @@ internal static class SnapshotParser
         };
     }
 
-    private static PlayerTrack? GetTrack(JsonElement element, string property)
+    /// <summary>曲目平台键：优先连接器给出的值，缺失/空串时用连接器 PlayerKey 兜底。</summary>
+    private static string ResolvePlatform(JsonElement element, string? defaultPlatform)
+    {
+        var platform = GetString(element, "platform");
+        return string.IsNullOrEmpty(platform) ? defaultPlatform ?? "" : platform;
+    }
+
+    private static PlayerTrack? GetTrack(JsonElement element, string property, string? defaultPlatform)
     {
         if (!element.TryGetProperty(property, out var value) || value.ValueKind != JsonValueKind.Object)
         {
@@ -70,7 +83,7 @@ internal static class SnapshotParser
 
         return new PlayerTrack
         {
-            Platform = GetString(value, "platform") ?? "",
+            Platform = ResolvePlatform(value, defaultPlatform),
             Id = GetString(value, "id") ?? "",
             Title = GetString(value, "title") ?? "",
             Artist = GetString(value, "artist") ?? "",

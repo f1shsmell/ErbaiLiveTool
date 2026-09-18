@@ -6,8 +6,9 @@ namespace Erbai.Player.Connectors;
 
 /// <summary>
 /// 连接器播放器插件（IMusicPlayerPlugin 实现，决策 #15）：把 ConnectorClient
-/// 的 NDJSON 协议面适配为插件契约面。能力从宿主 protocolCapabilities 推导
-/// （加性能力协商：snapshot-events-v1 → SnapshotEvents；原生搜索由后端决定）。
+/// 的 NDJSON 协议面适配为插件契约面。能力从 ping 的能力协商面推导
+/// （上游规范形状 result.features / result.capabilities，兼容本仓库旧宿主的
+/// 顶层 protocolCapabilities 字符串数组——见 ConnectorProtocol.ParsePing）。
 /// </summary>
 public sealed class ConnectorPlayerPlugin : IMusicPlayerPlugin
 {
@@ -32,22 +33,42 @@ public sealed class ConnectorPlayerPlugin : IMusicPlayerPlugin
     {
         var snapshot = await _client.ActivateAsync(ct);
         _activated = true;
-        // 加性能力协商：宿主 protocolCapabilities → PlayerCapabilities
-        //（snapshot-events-v1 → SnapshotEvents；queue-programmable-v1 →
-        // QueueProgrammable——不声明则插播对账守卫（GuardNextSong）整体旁路）
+        _capabilities = DeriveCapabilities(_client.Ping);
+        return snapshot;
+    }
+
+    /// <summary>
+    /// 加性能力协商：ping 能力面 → PlayerCapabilities。
+    /// 缺失 <see cref="PlayerCapabilities.QueueProgrammable"/> 会让插播对账守卫
+    /// （GuardNextSong）整体旁路（PlaybackStateMachine 判据），故上游连接器
+    /// 以 <c>capabilities.insertNext</c> 声明队列可编程、以
+    /// <c>features</c> 里的 <c>snapshot-events-v1</c> 声明快照事件流。
+    /// </summary>
+    internal static PlayerCapabilities DeriveCapabilities(ConnectorPingInfo ping)
+    {
         var caps = PlayerCapabilities.None;
-        if (_client.ProtocolCapabilities.Contains("snapshot-events-v1", StringComparer.Ordinal))
+
+        if (ping.HasFeature(ConnectorProtocol.FeatureSnapshotEvents))
         {
             caps |= PlayerCapabilities.SnapshotEvents;
         }
 
-        if (_client.ProtocolCapabilities.Contains("queue-programmable-v1", StringComparer.Ordinal))
+        if (ping.HasFeature(ConnectorProtocol.FeatureQueueProgrammable) || ping.Capabilities.InsertNext)
         {
             caps |= PlayerCapabilities.QueueProgrammable;
         }
 
-        _capabilities = caps;
-        return snapshot;
+        if (ping.Capabilities.Search)
+        {
+            caps |= PlayerCapabilities.Search;
+        }
+
+        if (ping.Capabilities.Pause && ping.Capabilities.Resume)
+        {
+            caps |= PlayerCapabilities.PauseResume;
+        }
+
+        return caps;
     }
 
     public async Task DeactivateAsync()

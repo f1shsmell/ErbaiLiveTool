@@ -86,29 +86,7 @@ public sealed class ConnectorHost
             {
                 case "ping":
                 {
-                    // 元数据面对齐 vendor 连接器语义（客户端可展示连接器版本/能力）
-                    using var pingStream = new MemoryStream();
-                    using (var pingWriter = new Utf8JsonWriter(pingStream))
-                    {
-                        pingWriter.WriteStartObject();
-                        pingWriter.WriteString("connectorId", "Erbai.Connector");
-                        pingWriter.WriteString("connectorVersion", "1.0");
-                        pingWriter.WriteNumber("protocolVersion", 1);
-                        pingWriter.WriteNumber("eventProtocolVersion", 1);
-                        pingWriter.WriteStartArray("capabilities");
-                        foreach (var capability in backend.ProtocolCapabilities)
-                        {
-                            pingWriter.WriteStringValue(capability);
-                        }
-
-                        pingWriter.WriteEndArray();
-                        pingWriter.WriteStartArray("features");
-                        pingWriter.WriteEndArray();
-                        pingWriter.WriteEndObject();
-                    }
-
-                    await WriteResponseAsync(output, request.Id, true,
-                        JsonDocument.Parse(pingStream.ToArray()).RootElement, null, ct);
+                    await WriteResponseAsync(output, request.Id, true, BuildPingResult(backend), null, ct);
                     break;
                 }
                 case "probe":
@@ -148,6 +126,57 @@ public sealed class ConnectorHost
         {
             await WriteResponseAsync(output, request.Id, false, null, ex.Message, ct);
         }
+    }
+
+    /// <summary>本连接器宿主版本（ping 元数据展示用）。</summary>
+    private static readonly string ConnectorVersion =
+        typeof(ConnectorHost).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+
+    /// <summary>
+    /// ping 元数据（docs/04 §1.4）。形状对齐上游 awoo 连接器实测响应：
+    /// <c>connectorId</c> = 平台键（上游健康检查按它比对连接器身份）、
+    /// <c>capabilities</c> = 命令级布尔对象、<c>features</c> = 能力名数组。
+    /// 响应顶层的 <c>protocolCapabilities</c> 字符串数组（旧形状）保持不变，
+    /// 供旧客户端继续读取——见 ConnectorProtocol.ParsePing 的兼容合并。
+    /// </summary>
+    private static JsonElement BuildPingResult(IConnectorBackend backend)
+    {
+        var features = backend.ProtocolCapabilities;
+        var capabilities = ConnectorCapabilitySet.FromFeatures(features);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("protocolVersion", 1);
+            writer.WriteNumber("eventProtocolVersion", 1);
+            writer.WriteString("connectorId", backend.Key);
+            writer.WriteString("connectorVersion", ConnectorVersion);
+            writer.WriteStartObject("capabilities");
+            writer.WriteBoolean("search", capabilities.Search);
+            writer.WriteBoolean("playSelected", capabilities.PlaySelected);
+            writer.WriteBoolean("previous", capabilities.Previous);
+            writer.WriteBoolean("pause", capabilities.Pause);
+            writer.WriteBoolean("resume", capabilities.Resume);
+            writer.WriteBoolean("toggle", capabilities.Toggle);
+            writer.WriteBoolean("next", capabilities.Next);
+            writer.WriteBoolean("insertNext", capabilities.InsertNext);
+            if (!string.IsNullOrEmpty(capabilities.InsertNextLevel))
+            {
+                writer.WriteString("insertNextLevel", capabilities.InsertNextLevel);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteStartArray("features");
+            foreach (var feature in features)
+            {
+                writer.WriteStringValue(feature);
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return JsonDocument.Parse(stream.ToArray()).RootElement.Clone();
     }
 
     private IConnectorBackend? ResolveBackend(string? player) =>

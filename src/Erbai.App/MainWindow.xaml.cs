@@ -295,6 +295,25 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         public event EventHandler? CanExecuteChanged { add { } remove { } }
     }
 
+    /// <summary>
+    /// 按导航 Tag 切页（供页面内按钮跳转到另一页，例如设置页"前往插件页安装"）。
+    /// </summary>
+    /// <remarks>
+    /// 只认 <c>NavigationViewItem</c> 上真实存在的 Tag：传一个不存在的 tag 会选中不到任何项，
+    /// 此时什么都不做，而不是把用户甩到概览页——静默跳到别处比不跳更难排查。
+    /// </remarks>
+    public void NavigateTo(string tag)
+    {
+        foreach (var item in Nav.MenuItems.OfType<Microsoft.UI.Xaml.Controls.NavigationViewItem>())
+        {
+            if (item.Tag?.ToString() == tag)
+            {
+                Nav.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
     private void Navigate()
     {
         // 页面过渡动画（UI 改进，参考 PCL 一切反馈皆动画）：切换页面时左侧滑入 + 淡入，

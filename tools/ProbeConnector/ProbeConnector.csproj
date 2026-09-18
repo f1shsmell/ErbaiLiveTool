@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 连接器协议一致性探针（P6 新增，取代原 tools/CompareConnectors）。
+       引用 Erbai.Player.Connectors 是为了**复用** ConnectorPlayerPlugin.DeriveCapabilities
+       本身，而不是把口径复制一份——探针一旦与产品口径分叉就失去意义。
+       不在 .sln 内：开发/诊断工具，不参与 CI 构建与测试。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- 程序集名带 Erbai. 前缀：InternalsVisibleTo 认的是程序集名，
+         而 Erbai.Player.Connectors 里声明的正是 Erbai.ProbeConnector。 -->
+    <AssemblyName>Erbai.ProbeConnector</AssemblyName>
+    <RootNamespace>Erbai.ProbeConnector</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Player.Connectors\Erbai.Player.Connectors.csproj" />
+  </ItemGroup>
+</Project>
