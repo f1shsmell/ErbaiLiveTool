@@ -62,3 +62,10 @@ vendor exe **不再随应用复用/发布**，仅作两项用途：① 读配套
   报告本应用会算出哪些 `PlayerCapabilities`（重点：`QueueProgrammable` 是否可推导，
   缺失会让插播对账守卫整体旁路且不报错）。用法见
   `tools/ProbeConnector/Program.cs` 头部注释；已安装的连接器可直接 `--player <键>` 探。
+
+- `tools/ConnectorSmoke`（2026-09-18 P7 新增）：**端到端**验收——不指向本目录的 exe，
+  而是按上游清单真的下载、校验、安装、拉起一个第三方连接器（安装根用临时目录，
+  跑完自动卸载）。用于验证整条产品装配链路，而非单点协议。用法见其 `Program.cs`
+  头部注释：`dotnet run --project tools/ConnectorSmoke -- netease|kugou|qqmusic|folia`。
+  需联网 + 下载 30–48MB 私有运行时，**不在 .sln 内、不进 CI**。
+  它与 `ProbeConnector` 的分工：前者验「装得上、跑得起」，后者验「协议对不对」。

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- P7 端到端验收：走真实产品代码路径安装并启动一个真实的第三方连接器插件。
+       刻意**引用产品项目**而不是自己拼 HTTP 调用——本工具的全部价值就在于
+       "被测的是产品代码，不是测试自己写的一套等价逻辑"。
+       不在 .sln 内：需要联网 + 会下载约 50MB 私有运行时，不能进 CI。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Erbai.Connectors.Management\Erbai.Connectors.Management.csproj" />
+    <ProjectReference Include="..\..\src\Erbai.Player.Connectors\Erbai.Player.Connectors.csproj" />
+  </ItemGroup>
+</Project>

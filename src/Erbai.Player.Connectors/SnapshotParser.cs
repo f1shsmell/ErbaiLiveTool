@@ -29,9 +29,9 @@ internal static class SnapshotParser
         var next = GetTrack(obj, "next", defaultPlatform);
         var nextSource = ConnectorProtocol.ParseNextSource(GetString(obj, "nextSource"));
         var rawStatus = GetString(obj, "rawStatus");
-        double? progress = obj.TryGetProperty("progressSeconds", out var p) && p.TryGetDouble(out var pv)
-            ? pv
-            : null;
+        // 走 ConnectorProtocol.ReadDouble：上游会显式发 null（见该方法注释），
+        // 直接 TryGetDouble 会在 null 上抛 InvalidOperationException。
+        double? progress = ConnectorProtocol.ReadDouble(obj, "progressSeconds");
 
         return new PlayerSnapshot
         {
@@ -59,9 +59,7 @@ internal static class SnapshotParser
             Title = GetString(element, "title") ?? "",
             Artist = GetString(element, "artist") ?? "",
             Album = GetString(element, "album") ?? "",
-            DurationSeconds = element.TryGetProperty("durationSeconds", out var d) && d.TryGetInt32(out var dv)
-                ? dv
-                : null,
+            DurationSeconds = ConnectorProtocol.ReadInt32(element, "durationSeconds"),
             CoverUrl = GetString(element, "coverUrl") ?? "",
             NativeData = GetString(element, "nativeData"),
         };
@@ -88,9 +86,7 @@ internal static class SnapshotParser
             Title = GetString(value, "title") ?? "",
             Artist = GetString(value, "artist") ?? "",
             Album = GetString(value, "album") ?? "",
-            DurationSeconds = value.TryGetProperty("durationSeconds", out var d) && d.TryGetInt32(out var dv)
-                ? dv
-                : null,
+            DurationSeconds = ConnectorProtocol.ReadInt32(value, "durationSeconds"),
             CoverUrl = GetString(value, "coverUrl") ?? "",
             NativeData = GetString(value, "nativeData"),
         };
