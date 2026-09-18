@@ -186,4 +186,112 @@ public class ThirdPartyConnectorProtocolTests
         // 空字符串 nextSource 归一为 Unknown（不抛、不误判）
         Assert.Equal(NextObservation.Unknown, snapshot.NextObservation);
     }
+
+    // ---------- 非数字字段的容错：真实上游会显式发 null ----------
+    //
+    // 这一组补的是 P7 端到端验收暴露出的缺陷：
+    // JsonElement.TryGetInt32 / TryGetDouble 在元素**不是 Number**（null / String / True）时
+    // 抛 InvalidOperationException，而不是返回 false；只有"是 Number 但非整数（1.5）
+    // 或超出目标类型范围"才返回 false。于是 `TryGetProperty(p, out v) && v.TryGetInt32(out n)`
+    // 这个看起来安全的写法，在"属性存在但值为 null"时会直接打崩调用方。
+    //
+    // 为什么原来测不出来：夹具里的数字永远合法。netease 的 ping 恰好**整个字段缺席**
+    // （缺属性时 TryGetProperty 返回 false，&& 短路后安全），而 kugou 显式发
+    // `"eventProtocolVersion": null`——只有真实上游能造出这个形状。
+
+    /// <summary>上游 kugou 连接器 ping 的真实响应（2026-09-18 实测抓取，逐字）。</summary>
+    /// <remarks>
+    /// 与 netease 的两处差异正是缺陷的触发条件：<c>eventProtocolVersion</c> 是 <c>null</c>
+    /// （netease 是整个字段缺席）、<c>features</c> 为空数组且 <c>pause</c>/<c>resume</c> 为 false。
+    /// </remarks>
+    private const string UpstreamKugouPingResult = """
+    {
+      "protocolVersion": 1,
+      "eventProtocolVersion": null,
+      "connectorId": "kugou",
+      "connectorVersion": "20.1.41.1",
+      "capabilities": {
+        "search": true,
+        "playSelected": true,
+        "previous": true,
+        "pause": false,
+        "resume": false,
+        "toggle": true,
+        "next": true,
+        "insertNext": true,
+        "insertNextLevel": "原生插入 + 上一首重置锚点的有界兜底"
+      },
+      "features": []
+    }
+    """;
+
+    [Fact]
+    public void ParsePing_EventProtocolVersionNull_TreatedAsZero_NotThrow()
+    {
+        var ping = ConnectorProtocol.ParsePing(Parse(UpstreamKugouPingResult));
+
+        Assert.Equal(1, ping.ProtocolVersion);
+        // null 归一为 0（"未声明"），关键是**不得抛异常**
+        Assert.Equal(0, ping.EventProtocolVersion);
+        Assert.Equal("kugou", ping.ConnectorId);
+        // kugou 不声明 snapshot-events-v1，但 insertNext 仍应被读到
+        Assert.False(ping.HasFeature(ConnectorProtocol.FeatureSnapshotEvents));
+        Assert.True(ping.Capabilities.InsertNext);
+        Assert.False(ping.Capabilities.Pause);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"12\"")]
+    [InlineData("true")]
+    [InlineData("1.5")]
+    [InlineData("99999999999")]
+    public void ReadInt32_NonIntegerOrNonNumber_ReturnsNull(string json)
+    {
+        var element = Parse($$"""{"v":{{json}}}""");
+
+        Assert.Null(ConnectorProtocol.ReadInt32(element, "v"));
+    }
+
+    [Fact]
+    public void ReadInt32_Integer_ReturnsValue_AndMissingPropertyReturnsNull()
+    {
+        var element = Parse("""{"v":42}""");
+
+        Assert.Equal(42, ConnectorProtocol.ReadInt32(element, "v"));
+        Assert.Null(ConnectorProtocol.ReadInt32(element, "absent"));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"3.5\"")]
+    [InlineData("true")]
+    [InlineData("1e400")] // TryGetDouble 会静默读成 +∞，必须被拒
+    public void ReadDouble_NonNumberOrNonFinite_ReturnsNull(string json)
+    {
+        var element = Parse($$"""{"v":{{json}}}""");
+
+        Assert.Null(ConnectorProtocol.ReadDouble(element, "v"));
+    }
+
+    [Fact]
+    public void Parse_ProgressSecondsNull_DoesNotThrow()
+    {
+        var element = Parse("""{"connected":true,"progressSeconds":null,"version":"1.0"}""");
+
+        var snapshot = SnapshotParser.Parse(element, "kugou");
+
+        Assert.True(snapshot.Connected);
+        Assert.Null(snapshot.ProgressSeconds);
+    }
+
+    [Fact]
+    public void DeserializeTrack_DurationSecondsNull_DoesNotThrow()
+    {
+        var element = Parse("""{"id":"1","title":"t","durationSeconds":null}""");
+
+        var track = SnapshotParser.DeserializeTrack(element, "kugou");
+
+        Assert.Null(track!.DurationSeconds);
+    }
 }

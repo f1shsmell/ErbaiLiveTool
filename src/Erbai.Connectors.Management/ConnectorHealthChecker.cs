@@ -231,10 +231,9 @@ public sealed class ConnectorHealthChecker : IConnectorHealthChecker
                 return $"{playerKey} 连接器 ping 回包缺少 result。";
             }
 
-            int protocolVersion = result.TryGetProperty("protocolVersion", out JsonElement protocolElement)
-                && protocolElement.TryGetInt32(out int parsedProtocol)
-                    ? parsedProtocol
-                    : 0;
+            // 走 ConnectorProtocol.ReadInt32：上游会显式发 "protocolVersion": null，
+            // 直接 TryGetInt32 会在 null 上抛 InvalidOperationException（见该方法注释）。
+            int protocolVersion = ConnectorProtocol.ReadInt32(result, "protocolVersion") ?? 0;
 
             if (protocolVersion != ConnectorProtocol.ProtocolVersion)
             {

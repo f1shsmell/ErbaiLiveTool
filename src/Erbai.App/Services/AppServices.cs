@@ -295,7 +295,10 @@ public sealed class AppServices : IAsyncDisposable
         // 清单校验 → 下载 → 签名校验 → 解压 → 私有运行时 → 健康检查 → 激活。
         services.AddSingleton(new ConnectorInstallLayout());
         services.AddSingleton(new PrivateDotnetRuntimeLayout());
-        services.AddSingleton(sp => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
+        // 必须走 ConnectorHttp.Create()：它统一了 5 分钟超时（连接器包 ~7MB、
+        // 私有运行时 33–48MB，HttpClient 默认的 100 秒不够稳），并保持与
+        // BilibiliApiClient / SearchHttpClient 一致的 UA 约定。
+        services.AddSingleton(_ => ConnectorHttp.Create());
         services.AddSingleton(sp => new PrivateDotnetRuntimeManager(
             sp.GetRequiredService<PrivateDotnetRuntimeLayout>(),
             sp.GetRequiredService<HttpClient>(),

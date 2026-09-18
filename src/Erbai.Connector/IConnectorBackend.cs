@@ -129,9 +129,9 @@ public static class SnapshotJson
             Title = GetString(obj, "title") ?? "",
             Artist = GetString(obj, "artist") ?? "",
             Album = GetString(obj, "album") ?? "",
-            DurationSeconds = obj.TryGetProperty("durationSeconds", out var d) && d.TryGetInt32(out var dv)
-                ? dv
-                : null,
+            // 走 ConnectorProtocol.ReadInt32：lxmusic 的曲目 JSON 会给 durationSeconds 发 null，
+            // 直接 TryGetInt32 会在 null 上抛 InvalidOperationException。
+            DurationSeconds = ConnectorProtocol.ReadInt32(obj, "durationSeconds"),
             CoverUrl = GetString(obj, "coverUrl") ?? "",
             NativeData = GetString(obj, "nativeData"),
         };

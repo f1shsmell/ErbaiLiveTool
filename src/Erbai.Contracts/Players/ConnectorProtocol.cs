@@ -154,8 +154,53 @@ public static class ConnectorProtocol
         };
     }
 
-    private static int? GetInt(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.TryGetInt32(out var parsed) ? parsed : null;
+    private static int? GetInt(JsonElement element, string property) => ReadInt32(element, property);
+
+    /// <summary>
+    /// 安全读 32 位整数：属性缺失、值为 <c>null</c>、或值不是 Number 时返回 <see langword="null"/>。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>不要直接写 <c>TryGetProperty(p, out v) &amp;&amp; v.TryGetInt32(out n)</c>。</b>
+    /// <see cref="JsonElement.TryGetInt32"/> 的名字有误导性：它<b>只</b>对"是 Number 但不是整数
+    /// （如 <c>1.5</c>）或超出 Int32 范围"返回 <see langword="false"/>；元素是 <c>null</c>、
+    /// 字符串或布尔时它<b>抛</b> <see cref="InvalidOperationException"/>。而
+    /// <c>TryGetProperty</c> 只保证"属性存在"，不保证"值是数字"。
+    /// </para>
+    /// <para>
+    /// 这个坑在 2026-09-18 的 P7 端到端验收中被真实上游触发：kugou 的 ping 回包显式带
+    /// <c>"eventProtocolVersion": null</c>（netease 则是整个字段缺席，所以只测 netease 时看不出来），
+    /// 导致 <see cref="ParsePing"/> 抛异常、连接器激活整体失败。
+    /// 单元测试用合成夹具、夹具里的数字永远合法，因此该缺陷在夹具层面<b>结构性不可见</b>——
+    /// 它是被"跑真实上游"发现的，不是被测试发现的。
+    /// </para>
+    /// <para>
+    /// 另需注意 <see cref="JsonElement.TryGetProperty"/> 在<b>容器本身不是对象</b>时
+    /// （例如整个 <c>result</c> 就是 <c>null</c>）同样会抛；调用方必须先确认容器
+    /// 是 <see cref="JsonValueKind.Object"/>。
+    /// </para>
+    /// </remarks>
+    public static int? ReadInt32(JsonElement element, string property) =>
+        element.TryGetProperty(property, out JsonElement value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out int parsed)
+            ? parsed
+            : null;
+
+    /// <summary>安全读双精度浮点：语义同 <see cref="ReadInt32"/>，并额外拒绝非有限值。</summary>
+    /// <remarks>
+    /// 拒绝 <see cref="double.IsFinite"/> 为假的值：JSON 里的 <c>1e400</c> 会被
+    /// <c>TryGetDouble</c> <b>静默</b>读成 <see cref="double.PositiveInfinity"/>，
+    /// 这对 <c>progressSeconds</c> 之类的进度字段没有意义，放行只会把它带进 UI。
+    /// 返回 <see langword="null"/> 与"字段缺失"同义。
+    /// </remarks>
+    public static double? ReadDouble(JsonElement element, string property) =>
+        element.TryGetProperty(property, out JsonElement value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetDouble(out double parsed)
+        && double.IsFinite(parsed)
+            ? parsed
+            : null;
 
     private static bool GetBool(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
