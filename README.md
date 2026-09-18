@@ -19,6 +19,16 @@
 | 酷狗音乐         | 窗口/ini/共享内存 + WM_COPYDATA 插歌 + 签名搜索               |                                    |
 | QQ 音乐        | 版本画像 profile + x86 trampoline 补丁（AddSongs mode=0） |                                    |
 
+## TODO
+
+- **播放器连接器插件化：仅保留 lxmusic 原生支持**
+  - 本仓库只内置**落雪音乐 lxmusic** 连接器。
+  - 其余四个平台（网易云 / 酷狗 / QQ 音乐 / Folia）改为**插件**形态，使用第三方连接器
+    [awoo-connectors](https://github.com/Enkianssus/awoo-connectors)，
+    由**用户自行下载**后放入插件目录。
+  - 届时本仓库不再内置、也不再分发这四个平台的连接器实现与相关二进制
+    （含 `src/Erbai.Connector/bridge/AwooNcmCefBridge.dll`）。
+
 ## 开发环境要求
 
 - Windows 10/11 x64
@@ -29,9 +39,13 @@
 
 ```bash
 dotnet build ErbaiLiveTool.sln -c Release -p:Platform=x64
-dotnet test                                                  # 单测
+dotnet test -c Release -p:Platform=x64                     # 单测（x64 必需，见下）
 dotnet publish src/Erbai.App -c Release -r win-x64 -p:Platform=x64 -o publish
 ```
+
+> `-p:Platform=x64` 不能省：`Erbai.App` 与 `Erbai.App.Tests` 是
+> `<Platforms>x64</Platforms>`，缺省平台会报
+> `WindowsAppSDKSelfContained requires a supported Windows architecture`。
 
 构建安装包（Stage B，Inno Setup；需已安装 Inno Setup 6）：
 
@@ -52,15 +66,23 @@ powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1
 
 - **抖音直播抓取器**（`src/Erbai.Live.Douyin.Grabber/`）：源自 MIT 开源项目
   （© 2022 一只小白猿），随附其原始 `LICENSE` 与 `免责声明.txt`，未作改动。
-- **awoo-connectors**：落雪音乐以外的播放器连接器均参考
+- **awoo-connectors**（落雪音乐以外的播放器连接器）：参考
   [Enkianssus/awoo-connectors](https://github.com/Enkianssus/awoo-connectors)
-  的连接器机制与数值（上游无许可证，仅作机制参考、未复制其代码表达；
-  vendored 二进制不入库，对照说明见 [`vendor/README.md`](vendor/README.md)）。
+  的连接器机制与数值（协议形态 / 注入与补丁方式 / 偏移地址 / 管道名 /
+  profile 签名）。**上游未附任何许可证**：本项目据其机制实现相应连接器，
+  **实现代码表达沿用上游**，故该部分不在本仓库 MIT 许可范围内。
+  vendored 二进制不入库，对照说明见 [`vendor/README.md`](vendor/README.md)。
+- **网易云 CEF bridge**（`src/Erbai.Connector/bridge/AwooNcmCefBridge.dll`）：
+  上游二进制，随本仓库与安装包一并分发，**上游同样未附许可证**，
+  不在本仓库 MIT 许可范围内。
 - **抖音弹幕抓包**：基于 [ape-byte/DouyinBarrageGrab](https://github.com/ape-byte/DouyinBarrageGrab)
-  的系统代理抓包思路；**bilibili 弹幕**：参考 [blivedm](https://github.com/xfgryujk/blivedm)
-  协议行为实现参考 blivedm（Apache-2.0，不包含其代码）。
+  的系统代理抓包思路；**bilibili 弹幕**：协议行为参考
+  [blivedm](https://github.com/xfgryujk/blivedm)（Apache-2.0，不包含其代码）。
 
 ## 许可
 
-本项目基于 MIT License（见 [`LICENSE`](LICENSE)），使用时仍需遵守抖音、Bilibili
-及各音乐平台的服务条款。
+本项目基于 MIT License（见 [`LICENSE`](LICENSE)）。**该许可仅覆盖本仓库原创代码**：
+上节「第三方组件」中标注为「上游未附许可证」的部分不在 MIT 许可范围内，
+使用者需自行评估并承担相应合规风险。
+
+使用时仍需遵守抖音、Bilibili 及各音乐平台的服务条款。

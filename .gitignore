@@ -24,7 +24,11 @@ installer/Output/
 .reasonix/
 
 # 内部文档(docs/)不入库：交接说明/决策记录/协议契约属私有，不随开源仓库发布
+# 该目录另有独立 git 仓库（docs/.git）承载版本历史与私有备份，不要在此处取消忽略
 docs/
+
+# AI 助手工作区数据（会话记忆/项目笔记，属私有，不随开源仓库发布）
+.workbuddy-ai/
 
 # Runtime data (databases / logs，运行期产物不入库)
 logs/
