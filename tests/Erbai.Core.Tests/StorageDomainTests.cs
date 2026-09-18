@@ -44,6 +44,40 @@ public class StorageDomainTests
             MedalLevel = medalLevel,
         };
 
+    /// <summary>
+    /// 跨房间特权 MAX（docs/03 §2 读取侧）：同一 (platform, user_id) 多房间行取 MAX。
+    /// 复刻实测形态——特权行在真实房间号下，另有一条 RoomId 缺失（''）的普通行。
+    /// </summary>
+    [Fact]
+    public async Task GetUserPrivilege_TakesMaxAcrossRooms()
+    {
+        await using var engine = await OpenEngineAsync();
+        await engine.SaveUserAsync(NewUser(roomId: "54380982833", userId: "u9", isAdmin: true, isAnchor: true));
+        await engine.SaveUserAsync(NewUser(roomId: "", userId: "u9"));
+
+        var (isAdmin, isAnchor) = await engine.GetUserPrivilegeAsync("douyin", "u9");
+
+        Assert.True(isAdmin);
+        Assert.True(isAnchor);
+    }
+
+    [Fact]
+    public async Task GetUserPrivilege_NoRecordOrEmptyUserId_ReturnsFalse()
+    {
+        await using var engine = await OpenEngineAsync();
+        Assert.Equal((false, false), await engine.GetUserPrivilegeAsync("douyin", "nobody"));
+        Assert.Equal((false, false), await engine.GetUserPrivilegeAsync("douyin", ""));
+    }
+
+    [Fact]
+    public async Task GetUserPrivilege_DoesNotLeakAcrossPlatforms()
+    {
+        await using var engine = await OpenEngineAsync();
+        await engine.SaveUserAsync(NewUser(platform: "bilibili", userId: "u9", isAdmin: true));
+
+        Assert.Equal((false, false), await engine.GetUserPrivilegeAsync("douyin", "u9"));
+    }
+
     [Fact]
     public async Task SaveUser_UpsertOverwritesNickname_KeepsLevelsOnNull()
     {

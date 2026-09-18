@@ -637,6 +637,35 @@ public sealed class SqliteStorageEngine : IStorageEngine
             return reader.Read() ? ReadUser(reader) : null;
         }, ct);
 
+    /// <summary>
+    /// 跨房间特权 MAX（docs/03 §2 读取侧）：同一 (platform, user_id) 的全部 room_id
+    /// 行取 MAX(is_admin)/MAX(is_anchor)。不按 room_id 过滤的原因见接口注释——
+    /// 按 room_id 精确匹配会漏掉 RoomId 缺失（''）或直播间号变化的记录。
+    /// </summary>
+    public Task<(bool IsAdmin, bool IsAnchor)> GetUserPrivilegeAsync(
+        string platform, string userId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                return (false, false);
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT COALESCE(MAX(is_admin), 0), COALESCE(MAX(is_anchor), 0) " +
+                "FROM users WHERE platform = $platform AND user_id = $userId";
+            command.Parameters.AddWithValue("$platform", platform);
+            command.Parameters.AddWithValue("$userId", userId);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return (false, false);
+            }
+
+            return (reader.GetInt64(0) != 0, reader.GetInt64(1) != 0);
+        }, ct);
+
     public Task<IReadOnlyList<User>> ListUsersAsync(
         string? platform = null,
         string? roomId = null,

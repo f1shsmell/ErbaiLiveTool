@@ -256,4 +256,107 @@ public class SongRequestCommandTests
         Assert.False(await commands.HandleMessageAsync(Ctx("你好呀")));
         Assert.Empty(await store.ListRequestsAsync());
     }
+
+    // ---- 存储特权回归（2026-09-18 用户实测：主播与设置的管理员均无法切歌）----
+    // 特权有两个来源：弹幕事件里的实时标志（平台给的房管/主播标记）与 users 表里
+    // 持久化的 is_admin/is_anchor（「设置管理员@XX」写的就是它；管理页的「主播/管理员」
+    // 角色列也读它）。平台事件对「应用内设置的管理员」永远不会打标，抖音主播弹幕也
+    // 常常不带 anchor 标志——只看事件标志会让这两类人一律切不了歌。
+
+    [Fact]
+    public async Task SkipCommand_StoredAdmin_WithoutPlatformFlag_SkipsFirst()
+    {
+        var (store, bus, logs, _, queue, _, commands) = await TestHarness.CreateAsync();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "1", UserId = "u2", Nickname = "小明", IsAdmin = true,
+        });
+        await queue.SubmitAsync(TestHarness.NewRequest("晴天", userId: "u1"));
+
+        Assert.True(await commands.HandleMessageAsync(Ctx("切歌", nickname: "小明", userId: "u2")));
+
+        Assert.Empty(await store.ListRequestsAsync(RequestStatuses.Active));
+        Assert.Equal(1, (await store.ListRequestsPageAsync(status: RequestStatus.Skipped)).Total);
+    }
+
+    [Fact]
+    public async Task SkipCommand_StoredAnchor_WithoutPlatformFlag_SkipsFirst()
+    {
+        var (store, bus, logs, _, queue, _, commands) = await TestHarness.CreateAsync();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "1", UserId = "u1", Nickname = "主播", IsAnchor = true,
+        });
+        await queue.SubmitAsync(TestHarness.NewRequest("晴天", userId: "u1"));
+
+        Assert.True(await commands.HandleMessageAsync(Ctx("切歌", nickname: "主播", userId: "u1")));
+
+        Assert.Empty(await store.ListRequestsAsync(RequestStatuses.Active));
+    }
+
+    [Fact]
+    public async Task SkipCommand_StoredPrivilege_DoesNotLeakToOthers()
+    {
+        var (store, bus, logs, _, queue, _, commands) = await TestHarness.CreateAsync();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "1", UserId = "u2", Nickname = "小明", IsAdmin = true,
+        });
+        await queue.SubmitAsync(TestHarness.NewRequest("晴天", userId: "u1"));
+
+        // 另一个没有特权（且库里无记录）的用户切歌 → 消费但不动队列
+        Assert.True(await commands.HandleMessageAsync(Ctx("切歌", nickname: "路人", userId: "u9")));
+
+        Assert.Single(await store.ListRequestsAsync(RequestStatuses.Active));
+    }
+
+    /// <summary>
+    /// 复刻生产库真实形态（2026-09-16 实测数据）：主播「白眉神探」在
+    /// room_id=54380982833 有 is_anchor=1 的行，同时因弹幕事件缺 RoomId 又落了一行
+    /// room_id=''（is_anchor=0）。切歌弹幕走的正是空 RoomId 那条——特权查询必须
+    /// 跨房间取 MAX，按 room_id 精确匹配会命中无特权那行，主播照样切不了歌。
+    /// </summary>
+    [Fact]
+    public async Task SkipCommand_StoredPrivilege_SurvivesRoomIdMismatch()
+    {
+        var (store, bus, logs, _, queue, _, commands) = await TestHarness.CreateAsync();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "54380982833", UserId = "2810778114588685",
+            Nickname = "白眉神探", IsAdmin = true, IsAnchor = true,
+        });
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "", UserId = "2810778114588685", Nickname = "白眉神探",
+        });
+        await queue.SubmitAsync(TestHarness.NewRequest("晴天", userId: "u1"));
+
+        // 弹幕事件 RoomId 为空（实测报文如此）且不带任何平台标志
+        Assert.True(await commands.HandleMessageAsync(
+            Ctx("切歌", nickname: "白眉神探", userId: "2810778114588685") with { RoomId = "" }));
+
+        Assert.Empty(await store.ListRequestsAsync(RequestStatuses.Active));
+    }
+
+    [Fact]
+    public async Task AdminCommand_ByStoredAdmin_WithoutPlatformFlag_TakesEffect()
+    {
+        var (store, bus, logs, _, queue, _, commands) = await TestHarness.CreateAsync();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "1", UserId = "u2", Nickname = "小明", IsAdmin = true,
+        });
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "1", UserId = "u3", Nickname = "小红",
+        });
+
+        // 存储管理员（弹幕事件不带标志）设置另一位管理员 → 应生效
+        Assert.True(await commands.HandleMessageAsync(
+            Ctx("设置管理员@小红", nickname: "小明", userId: "u2")));
+
+        var target = await store.GetUserAsync("douyin", "1", "u3");
+        Assert.NotNull(target);
+        Assert.True(target.IsAdmin);
+    }
 }
