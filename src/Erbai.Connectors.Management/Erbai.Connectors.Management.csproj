@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 连接器管理内核（决策 D1/D2/D3/D6）。
+       职责：v2 清单拉取与校验、安装包校验（size → SHA-256 → Ed25519）、安全解压、
+       分块下载与回退、原子安装与回滚、active.json 存储、启动健康检查。
+       刻意不引用 WinUI / Erbai.App，也不引用 Erbai.Player.Connectors：
+       纯 net8.0 类库，便于单测，且后续可被 App 与工具复用。
+       清单格式与校验顺序见 docs/04 §1.4、docs/07。 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Erbai.Contracts\Erbai.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 测试专用：允许 Erbai.Connectors.Management.Tests 访问 internal（目录布局、校验顺序等） -->
+    <InternalsVisibleTo Include="Erbai.Connectors.Management.Tests" />
+  </ItemGroup>
+</Project>

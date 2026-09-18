@@ -19,7 +19,7 @@
         <StackPanel Padding="24,24,24,24" Spacing="4" MaxWidth="1000" HorizontalAlignment="Left">
 
             <TextBlock Text="插件" Style="{StaticResource PageTitleTextStyle}" Margin="0,0,0,4" />
-            <TextBlock Text="直播平台与播放器为连接型插件（在概览页与设置页操作）；此处查看连接状态并管理功能模块与搜索源。"
+            <TextBlock Text="直播平台与播放器为连接型插件（在概览页与设置页操作）；此处查看连接状态、安装播放器连接器，并管理功能模块与搜索源。"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16" />
 
             <!-- 目录式插件（Plugins/，决策 #4/#16 + Stage A）：列表 + 启停 + 配置项只读 -->
@@ -116,8 +116,59 @@
                 </StackPanel>
             </lab:SettingsCard>
             <lab:SettingsCard Header="连接器状态">
-                <TextBlock x:Name="PlayerDetailText" Text="-" IsTextSelectionEnabled="True" />
+                <TextBlock x:Name="PlayerDetailText" Text="-" IsTextSelectionEnabled="True" TextWrapping="Wrap" />
             </lab:SettingsCard>
+
+            <!-- 播放器连接器插件（插件化改造 2026-09）：四平台改由第三方连接器提供，
+                 此处安装 / 更新 / 离线安装；落雪音乐随应用发布，不在此列。 -->
+            <TextBlock Text="播放器连接器" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,4" />
+            <TextBlock Text="网易云 / 酷狗 / QQ音乐 / Folia 由第三方连接器提供（awoo-connectors），需先安装才能选用；落雪音乐随应用发布，无需安装。安装前会校验官方签名。"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                <TextBlock Text="{x:Bind ConnectorRootText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="520" />
+                <Button Content="打开连接器目录" Click="OnOpenConnectorFolder" Padding="8,2" FontSize="11" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,4">
+                <Button x:Name="CheckConnectorsButton" Content="检查更新" Click="OnCheckConnectors" />
+                <Button x:Name="InstallFromZipButton" Content="从本地 ZIP 安装" Click="OnInstallFromZip" />
+            </StackPanel>
+            <TextBlock x:Name="ConnectorStatusText" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       FontSize="12" TextWrapping="Wrap" Margin="0,2,0,4" Visibility="Collapsed" />
+            <TextBlock x:Name="ConnectorEmptyText" Text="正在读取连接器状态…"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
+            <ListView x:Name="ConnectorList" SelectionMode="None" Margin="0,4,0,4">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="views:ConnectorStatusDisplay">
+                        <Border CornerRadius="6" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" Padding="12,8" Margin="0,0,0,8"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                        <Border CornerRadius="8" Padding="6,1" Background="{x:Bind StatusBrush}">
+                                            <TextBlock Text="{x:Bind StatusText}" FontSize="11" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{x:Bind VersionText}" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{x:Bind DetailText}" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap" Visibility="{x:Bind HasDetail}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="{x:Bind ActionText}" MinWidth="96"
+                                        VerticalAlignment="Center" Visibility="{x:Bind CanAct}"
+                                        Click="OnConnectorAction" Tag="{x:Bind PlayerKey}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
 
             <!-- 功能模块:集中开关 -->
             <TextBlock Text="功能模块" FontSize="14" FontWeight="SemiBold" Margin="0,20,0,4" />

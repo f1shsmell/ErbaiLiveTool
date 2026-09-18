@@ -1,24 +1,18 @@
 using Erbai.Connector;
-using Erbai.Connector.Folia;
-using Erbai.Connector.Kugou;
 using Erbai.Connector.LxMusic;
-using Erbai.Connector.Netease;
-using Erbai.Connector.QQMusic;
 
-// 连接器宿主 exe（决策 #15）：NDJSON-stdio 服务端循环。
-// 协议规范见 docs/04 §1.4；五平台后端注册在此（阶段 2 先落 dummy + lxmusic，
-// 阶段 6 补齐 folia/netease/kugou/qqmusic）。lxmusic 配置经环境变量 LX_* 注入
-// （见 LxMusicOptions）；Folia token 经 BILINCM_FOLIA_TOKEN 注入（见 FoliaOptions）；
-// QQ 音乐画像经 profiles/qqmusic/*.json 外置加载（见 QQMusicProfiles）；
-// 网易云 bridge DLL 随应用发布（bridge/AwooNcmCefBridge.dll，用户已拍板复用）。
+// 连接器宿主 exe（决策 #15）：NDJSON-stdio 服务端循环，协议规范见 docs/04 §1.4。
+//
+// 本进程只承载 **lxmusic 原生后端**。网易云 / 酷狗 / QQ 音乐 / Folia 已改为插件形态：
+// 由用户按清单安装上游第三方连接器（各自独立的 exe），本进程既不实现也不分发它们。
+// 因此这里的后端表不再是"五平台"，而是"原生通道 + 插件通道"里的原生一侧——
+// 插件平台的连接器由 Erbai.Player.Connectors 直接拉起各自 exe，不经过本宿主。
+//
+// lxmusic 配置经环境变量 LX_* 注入（见 LxMusicOptions）；dummy 供测试与黑盒对照。
 var backends = new Dictionary<string, IConnectorBackend>
 {
     ["dummy"] = new DummyConnector(),
     ["lxmusic"] = new LxMusicConnector(LxMusicOptions.FromEnvironment()),
-    ["folia"] = new FoliaConnector(FoliaOptions.FromEnvironment()),
-    ["kugou"] = new KugouConnector(),
-    ["qqmusic"] = new QqMusicConnector(),
-    ["netease"] = new NeteaseConnector(),
 };
 
 using var input = Console.OpenStandardInput();

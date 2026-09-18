@@ -5,8 +5,12 @@ Awoo 播放器连接器（`Awoo.Connector.*.exe`，NDJSON-stdio 协议，协议�
 
 **角色（2026-08-23 决策 #15 起）**：连接器接入上游（`Erbai.Connector`），本目录的
 vendor exe **不再随应用复用/发布**，仅作两项用途：① 读配套源码理解机制与数值
-（偏移地址/管道名/profile 签名——功能性事实，不受版权保护）；② 新旧连接器并行
-黑盒对照（同一命令序列比对响应，参照阶段 4 Grabber 对比法）。
+（偏移地址/管道名/profile 签名——功能性事实，不受版权保护）；② 探测第三方连接器的
+协议一致性（`tools/ProbeConnector`，见下）。
+
+**角色补充（2026-09-18，连接器插件化后）**：这四个平台已改为**插件形态**，
+本目录的 exe 与用户实际安装的上游连接器是**同一批产物**（同来源、同签名），
+因此它同时是「插件安装流程的本地样本」——可用来离线验证安装/校验/拉起链路。
 
 ## 来源与许可
 
@@ -52,5 +56,9 @@ vendor exe **不再随应用复用/发布**，仅作两项用途：① 读配套
 #   (纯音乐)/(Inst.)/(Instrumental) 别名处理）。
 ```
 
-- `tools/CompareConnectors` 默认旧连接器路径已随目录结构调整为
-  `vendor/<player>/Awoo.Connector.<player>.exe`。
+- `tools/ProbeConnector`（2026-09-18 由 `tools/CompareConnectors` 改造而来）：
+  原工具做「新旧连接器并行黑盒对照」，插件化后本仓库不再实现这四个平台，
+  该语义已不存在；改为**单边协议探针**——对任意连接器 exe 发 `ping`，
+  报告本应用会算出哪些 `PlayerCapabilities`（重点：`QueueProgrammable` 是否可推导，
+  缺失会让插播对账守卫整体旁路且不报错）。用法见
+  `tools/ProbeConnector/Program.cs` 头部注释；已安装的连接器可直接 `--player <键>` 探。

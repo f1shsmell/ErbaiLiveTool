@@ -76,7 +76,7 @@ if (-not $SkipPublish) {
     if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-    Write-Host "[installer] publish Connector（多文件，含 bridge\profiles）..."
+    Write-Host "[installer] publish Connector（多文件，仅 lxmusic 原生后端）..."
     & dotnet publish (Join-Path $repoRoot 'src\Erbai.Connector') -c $Configuration -r win-x64 -o (Join-Path $tmp 'connector')
     if ($LASTEXITCODE -ne 0) { throw 'dotnet publish Connector 失败' }
 
@@ -98,16 +98,14 @@ else {
 Get-ChildItem -Path $publishDir -Recurse -Filter '*.pdb' | Remove-Item -Force
 
 # 产物断言：发布清单完整（9 应用文件 + 4 内置插件文件（StageA M6 迁移，组合根依赖）
-# + 无调试符号），保证可复现与打包一致性
+# + 无调试符号），保证可复现与打包一致性。
+# 注：bridge\AwooNcmCefBridge.dll 与 profiles\qqmusic\*.json 已随「连接器插件化」移除
+#（四平台不再内置、不再分发），此处刻意不再断言它们存在——若哪天又出现，属打包回归。
 $required = @(
     'ErbaiLiveTool.exe',
     'Erbai.Connector.exe', 'Erbai.Connector.dll', 'Erbai.Connector.deps.json', 'Erbai.Connector.runtimeconfig.json',
     'Erbai.Contracts.dll',
-    'bridge\AwooNcmCefBridge.dll',
     'DouyinBarrageGrab\WssBarrageServer.exe',
-    'profiles\qqmusic\22.52.json',
-    'profiles\qqmusic\22.60.json',
-    'profiles\qqmusic\22.61.json',
     'Plugins\queueup\config.ini', 'Plugins\queueup\Erbai.Modules.QueueUp.dll',
     'Plugins\giftfx\config.ini', 'Plugins\giftfx\Erbai.Modules.GiftFx.dll'
 )

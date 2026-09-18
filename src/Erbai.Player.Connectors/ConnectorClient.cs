@@ -54,6 +54,13 @@ public sealed class ConnectorClient : IAsyncDisposable
     /// <summary>宿主加性能力（ping 建连时协商；snapshot-events-v1 等）。</summary>
     public IReadOnlyList<string> ProtocolCapabilities => _capabilities;
 
+    /// <summary>
+    /// ping 元数据（能力协商面，含上游规范形状的 capabilities 布尔对象与 features）。
+    /// 未建连时为空对象。
+    /// </summary>
+    public ConnectorPingInfo Ping => _ping;
+
+    private ConnectorPingInfo _ping = new();
     private IReadOnlyList<string> _capabilities = [];
 
     /// <summary>启动子进程并 ping 建连，返回首帧快照。</summary>
@@ -66,7 +73,10 @@ public sealed class ConnectorClient : IAsyncDisposable
             throw new InvalidOperationException($"connector ping failed: {response.Error}");
         }
 
-        _capabilities = response.ProtocolCapabilities;
+        // 能力协商：兼容上游规范形状（result.features / result.capabilities）
+        // 与本仓库旧宿主形状（响应顶层 protocolCapabilities 字符串数组）
+        _ping = ConnectorProtocol.ParsePing(response.Result, response.ProtocolCapabilities);
+        _capabilities = _ping.Features;
         return await ProbeAsync(ct);
     }
 
@@ -78,7 +88,7 @@ public sealed class ConnectorClient : IAsyncDisposable
             throw new InvalidOperationException($"connector probe failed: {response.Error}");
         }
 
-        return SnapshotParser.Parse(response.Result);
+        return SnapshotParser.Parse(response.Result, _playerKey);
     }
 
     public async Task<IReadOnlyList<PlayerTrack>> SearchAsync(string query, CancellationToken ct)
@@ -94,7 +104,7 @@ public sealed class ConnectorClient : IAsyncDisposable
         {
             foreach (var item in array.EnumerateArray())
             {
-                var track = SnapshotParser.DeserializeTrack(item);
+                var track = SnapshotParser.DeserializeTrack(item, _playerKey);
                 if (track is not null)
                 {
                     tracks.Add(track);
@@ -299,7 +309,7 @@ public sealed class ConnectorClient : IAsyncDisposable
 
                     if (ev is { Event: "snapshot" } && ev.Snapshot is { } snapshot)
                     {
-                        _eventChannel.Writer.TryWrite(SnapshotParser.Parse(snapshot));
+                        _eventChannel.Writer.TryWrite(SnapshotParser.Parse(snapshot, _playerKey));
                     }
 
                     continue;
