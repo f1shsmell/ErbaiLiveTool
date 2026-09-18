@@ -71,6 +71,15 @@ public interface IStorageEngine : IAsyncDisposable
     Task<User?> GetUserAsync(string platform, string roomId, string userId, CancellationToken ct = default);
 
     /// <summary>
+    /// 跨房间特权查询（docs/03 §2「特权合并不降级」的<b>读取侧</b>）：同一
+    /// (platform, user_id) 在多个 room_id 下可能有记录——弹幕事件的 RoomId 可能缺失
+    /// （落库为 ''）、直播间号也可能变化——任一房间是管理员/主播即视为有特权。
+    /// 与 <see cref="ListUsersAsync"/> 的跨房间 MAX 语义一致；无记录返回 (false, false)。
+    /// 供命令权限判定使用：按 room_id 精确匹配会漏掉上述记录（2026-09-18 实测）。
+    /// </summary>
+    Task<(bool IsAdmin, bool IsAnchor)> GetUserPrivilegeAsync(string platform, string userId, CancellationToken ct = default);
+
+    /// <summary>
     /// 按 platform/room_id 过滤 + 昵称子串匹配（LIKE，转义 %/_）；跨房间按
     /// (platform, user_id) 去重取最新，admin/anchor 取分组 MAX（任一房间是
     /// 管理员即显示管理员），管理员置顶再按昵称排序。

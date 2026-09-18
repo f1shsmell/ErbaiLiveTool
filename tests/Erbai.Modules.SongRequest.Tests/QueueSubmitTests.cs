@@ -244,6 +244,34 @@ public class QueueSubmitTests
         Assert.Equal(1, snapshot.Items[0].Position);
     }
 
+    /// <summary>
+    /// 存储特权（「设置管理员@XX」/ 主播身份）与弹幕事件标志等效绕过等级门槛，
+    /// 且<b>不限平台</b>：原实现只有 bilibili 分支，抖音的存储管理员/主播配了
+    /// 粉丝团等级门槛后点歌会被挡（2026-09-18 修，与切歌权限同源）。
+    /// </summary>
+    [Fact]
+    public async Task Submit_StoredAdmin_BypassesLevelGate_OnEveryPlatform()
+    {
+        var config = TestHarness.DefaultConfig() with
+        {
+            Permissions = TestHarness.DefaultConfig().Permissions with { DouyinMinFanLevel = 10 },
+        };
+        var (store, bus, logs, _, queue, _, _) = await TestHarness.CreateAsync(config);
+        using var sub = bus.Subscribe<QueueEventEnvelope>();
+        await store.SaveUserAsync(new Erbai.Contracts.Storage.User
+        {
+            Platform = "douyin", RoomId = "54380982833", UserId = "u2", Nickname = "小明", IsAdmin = true,
+        });
+
+        // 弹幕事件不带 admin 标志、等级不足，且事件 RoomId 与存储不一致（实测形态）
+        var (request, decision) = await queue.SubmitAsync(TestHarness.NewRequest(
+            "晴天", roomId: "", userId: "u2", fanLevel: 0));
+
+        Assert.True(decision.Allowed);
+        Assert.NotNull(request);
+        Assert.True(request.IsAdmin);
+    }
+
     [Fact]
     public async Task Submit_BilibiliAdminMerge_FromStoredPrivileges()
     {

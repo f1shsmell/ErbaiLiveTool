@@ -755,7 +755,13 @@ public sealed class AppServices : IAsyncDisposable
         Logs.Log(Erbai.Contracts.Logging.LogLevel.Information, "[抖音] 平台已停止");
     }
 
-    /// <summary>注入一条测试弹幕（dummy 平台，端到端演示/冒烟；阶段 3 起由真实平台适配器调用）。</summary>
+    /// <summary>
+    /// 注入一条弹幕（本机 UI 手动输入框 / 测试按钮；真实弹幕走平台适配器，不经过这里）。
+    /// <b>必须带主播特权</b>：本机操作者就是主播本人，而 QueuePage / OverviewPage 的
+    /// 手动输入框明确支持「切歌」「设置管理员@XX」等管理命令（两处注释均写明）。
+    /// 此前注入的上下文不带任何特权标志，手动输入「切歌」会被权限门一律拒掉
+    /// （2026-09-18 用户实测「主播无法切歌」的本机路径）。
+    /// </summary>
     public Task<bool> InjectDanmakuAsync(string text, string nickname = "测试观众")
     {
         var ctx = new DanmakuContext
@@ -765,6 +771,7 @@ public sealed class AppServices : IAsyncDisposable
             Platform = "douyin",
             RoomId = "1",
             UserId = $"test-{Environment.TickCount64}",
+            IsAnchor = true,
         };
         return Commands.HandleMessageAsync(ctx);
     }

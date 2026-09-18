@@ -107,7 +107,7 @@ public sealed class SongRequestService
 
         if (command.Action == "skip")
         {
-            if (!(ctx.IsAdmin || ctx.IsAnchor))
+            if (!await HasOperatorPrivilegeAsync(ctx, ct))
             {
                 Log(ctx, $"「{ctx.Nickname}」尝试切歌，但没有主播/管理员权限");
                 return true;
@@ -156,9 +156,50 @@ public sealed class SongRequestService
         await _queue.PausePlayerWhenIdleAsync(ct);
     }
 
+    /// <summary>
+    /// 操作员特权判定（切歌 / 管理命令共用）：弹幕事件的实时标志优先（命中即返回，
+    /// 不查库）；未命中时回落到 users 表里持久化的 is_admin / is_anchor。
+    ///
+    /// 为什么必须查库（2026-09-18 用户实测「主播与设置的管理员均无法切歌」）：
+    /// 特权有两个来源——平台事件标志（房管/主播标记）与持久化记录。「设置管理员@XX」
+    /// 写的就是 users.is_admin，平台事件永远不会为应用内设置的管理员打标；抖音主播
+    /// 的弹幕也常常不带 anchor 标志（Grabber 报文体差异）。只看事件标志会让这两类
+    /// 人一律被拒。存储侧「特权合并不降级」语义见 docs/03 §2——此前该语义只在
+    /// 写入侧与 bilibili 提交流水线生效，读取侧（本方法）是缺口。
+    ///
+    /// 查询必须<b>跨房间</b>（<see cref="IStorageEngine.GetUserPrivilegeAsync"/>），
+    /// 不能按 ctx.RoomId 精确匹配：实测库中同一用户既有 room_id='54380982833'
+    /// （is_anchor=1）又有 room_id=''（弹幕事件缺 RoomId 时落库）两条记录，切歌
+    /// 弹幕恰好走空 RoomId 那条 → 精确匹配会查到无特权的那行，主播照样被拒。
+    /// </summary>
+    private async Task<bool> HasOperatorPrivilegeAsync(DanmakuContext ctx, CancellationToken ct)
+    {
+        if (ctx.IsAdmin || ctx.IsAnchor)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(ctx.UserId))
+        {
+            return false;
+        }
+
+        try
+        {
+            var (isAdmin, isAnchor) = await _store.GetUserPrivilegeAsync(ctx.Platform, ctx.UserId, ct);
+            return isAdmin || isAnchor;
+        }
+        catch (Exception ex)
+        {
+            // 存储抖动按无特权处理：命令路径不得因查询失败而崩溃
+            _logs.Log(LogLevel.Warning, $"[{ctx.Platform}点歌] 特权查询失败（按无特权处理）：{ex.Message}");
+            return false;
+        }
+    }
+
     private async Task<bool> HandleAdminCommandAsync(DanmakuContext ctx, string target, bool admin, CancellationToken ct)
     {
-        if (!(ctx.IsAdmin || ctx.IsAnchor))
+        if (!await HasOperatorPrivilegeAsync(ctx, ct))
         {
             Log(ctx, $"「{ctx.Nickname}」尝试管理管理员，但没有主播/房管权限");
             return true;
@@ -188,7 +229,7 @@ public sealed class SongRequestService
 
     private async Task<bool> HandleBanCommandAsync(DanmakuContext ctx, string target, bool banned, CancellationToken ct)
     {
-        if (!(ctx.IsAdmin || ctx.IsAnchor))
+        if (!await HasOperatorPrivilegeAsync(ctx, ct))
         {
             Log(ctx, $"「{ctx.Nickname}」尝试拉黑用户，但没有主播/房管权限");
             return true;
@@ -222,7 +263,7 @@ public sealed class SongRequestService
 
     private async Task<bool> HandleSongBanCommandAsync(DanmakuContext ctx, string songName, bool banned, CancellationToken ct)
     {
-        if (!(ctx.IsAdmin || ctx.IsAnchor))
+        if (!await HasOperatorPrivilegeAsync(ctx, ct))
         {
             Log(ctx, $"「{ctx.Nickname}」尝试拉黑歌曲，但没有主播/房管权限");
             return true;

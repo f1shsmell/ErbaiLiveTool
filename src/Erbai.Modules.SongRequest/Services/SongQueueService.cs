@@ -91,15 +91,25 @@ public sealed class SongQueueService
                 : request.CanonicalSongKey;
             request = request with { CanonicalSongKey = canonical };
 
-            // B 站弹幕回调同步拿不到存储特权：统一在提交时合并（B 站无"显式
-            // 标志"降级语义，or 合并正确；撤销 admin 后存储为 False 即不升）。
-            // 抖音路径已在弹幕处理时精细合并，此处不动，避免破坏显式标志语义。
-            if (request.Platform == "bilibili" && !string.IsNullOrEmpty(request.UserId))
+            // 存储特权合并（docs/03 §2）：弹幕事件拿不到应用内持久化的特权——
+            // 「设置管理员@XX」写的是 users.is_admin，平台永远不会为它打标；抖音主播的
+            // 弹幕也常不带 anchor 标志，且事件 RoomId 可能缺失（落库为空房间行）。
+            // 统一按 (platform, userId) 跨房间取 MAX 合并；admin/anchor 只升不降
+            //（撤销走「取消管理员」直接写库为 False，天然不升）。
+            // 原实现只对 bilibili 生效——注释称「抖音路径已在弹幕处理时精细合并」，
+            // 实际 DouyinUserSync 只写库不读库，于是抖音的存储管理员/主播在配了
+            // 粉丝团等级门槛后点歌会被挡（2026-09-18 修）。
+            if (!string.IsNullOrEmpty(request.UserId))
             {
-                var stored = await _store.GetUserAsync("bilibili", request.RoomId, request.UserId, ct);
-                if (stored is { IsAdmin: true })
+                var (storedAdmin, storedAnchor) = await _store.GetUserPrivilegeAsync(
+                    request.Platform, request.UserId, ct);
+                if (storedAdmin || storedAnchor)
                 {
-                    request = request with { IsAdmin = true };
+                    request = request with
+                    {
+                        IsAdmin = request.IsAdmin || storedAdmin,
+                        IsAnchor = request.IsAnchor || storedAnchor,
+                    };
                 }
             }
 
