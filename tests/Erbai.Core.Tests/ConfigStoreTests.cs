@@ -6,7 +6,7 @@ namespace Erbai.Core.Tests;
 
 /// <summary>
 /// 配置系统（行为域：配置校验/原子写/回滚）。
-/// 校验规则（docs/03 §4）。
+/// 校验规则。
 /// </summary>
 public class ConfigStoreTests
 {

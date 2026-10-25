@@ -5,7 +5,7 @@ using Microsoft.Win32;
 namespace Erbai.Live.Douyin.Hosting;
 
 /// <summary>
-/// WinINET 系统代理读写（真实现；docs/04 §3.2）：
+/// WinINET 系统代理读写（真实现；）：
 /// HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings 的
 /// ProxyEnable/ProxyServer/ProxyOverride/AutoConfigURL，写入后 InternetSetOptionW(39/37) 广播。
 /// </summary>

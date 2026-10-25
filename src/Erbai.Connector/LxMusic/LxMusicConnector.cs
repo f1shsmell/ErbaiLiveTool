@@ -28,7 +28,7 @@ public sealed record LxMusicOptions
 
 /// <summary>
 /// 落雪音乐连接器（决策 #15，官方三通道封装，无注入/无内存操作；能力语义与
-/// 旧适配器一致，docs/04 §1.3）：Scheme URL（music/play/music/search/
+/// 旧适配器一致，）：Scheme URL（music/play/music/search/
 /// player/skipNext/player/play）+ HTTP OpenAPI（/status、控制 /pause 等）+ SSE
 /// 订阅。Pause 无 Scheme 端点必须走 HTTP；InsertNext/ArmNextGuard/
 /// InterruptSelected 不支持；search 只打开搜索页返回 []；SSE 事件队列有界 8 丢旧。
@@ -142,7 +142,7 @@ public sealed class LxMusicConnector : IConnectorBackend
                 return await LaunchControlAsync(_scheme.PlayerSkipNextUrl());
 
             case PlayerCommand.Pause:
-                // Pause 无 Scheme 端点，必须走 HTTP（docs/04 §1.3）
+                // Pause 无 Scheme 端点，必须走 HTTP
                 if (!_http.Enabled)
                 {
                     return DummyConnector.SerializeResult(
@@ -411,7 +411,7 @@ public sealed class LxMusicConnector : IConnectorBackend
     /// （"playing"/"paused"/"stoped"）。真实落雪返回的是动词原形，不在
     /// PlayerStatusVocabulary 词表内——不做映射则 DeriveStatus 回退按 Current
     /// 推断，播完后 name 仍非空 → 一直判 "playing"，队列要等到总预算
-    /// （时长+缓冲，默认 60s）才移除当前歌、才派发下一首（docs/00 用户实测）。
+    /// （时长+缓冲，默认 60s）才移除当前歌、才派发下一首。
     /// 未知值（含 "error"）原样透传；null 保持 null（调用方按契约回退推断）。
     /// </summary>
     internal static string? MapStatus(string? status)

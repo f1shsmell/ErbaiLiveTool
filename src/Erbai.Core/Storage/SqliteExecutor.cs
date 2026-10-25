@@ -5,8 +5,7 @@ namespace Erbai.Core.Storage;
 
 /// <summary>
 /// SQLite 串行执行器：所有数据库访问经单一专用线程串行化
-/// （docs/03 §3.2「专用写线程串行化所有写」的 C# 等价实现，读写都走同一
-/// 通道，与旧版 asyncio.Lock 串行化语义一致）。
+/// 。
 /// 异常兜底回滚活动事务：部分执行的语句（如 UPDATE 成功、INSERT 审计失败）
 /// 不得悬挂到下一次 commit 意外提交。
 /// </summary>

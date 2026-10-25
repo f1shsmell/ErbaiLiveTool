@@ -2,7 +2,7 @@ namespace Erbai.Contracts.Configuration;
 
 /// <summary>
 /// 应用随附文件定位（config.json / logs / sqlite / 子进程 exe / bridge / profiles）。
-/// 一律以【宿主 exe 所在目录】为准（app-dir 语义，docs/00 修复记录）：
+/// 一律以【宿主 exe 所在目录】为准（app-dir 语义，历史修复记录）：
 /// 单文件发布（PublishSingleFile + IncludeAllContentForSelfExtract）运行时，
 /// <see cref="AppContext.BaseDirectory"/> 指向 %TEMP%\.net\&lt;App&gt;\&lt;hash&gt; 的
 /// bundle 解压缓存目录（.NET 8 实测，PathProbe 复现），随附文件并不在那里——

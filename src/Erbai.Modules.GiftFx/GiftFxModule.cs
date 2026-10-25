@@ -7,7 +7,7 @@ using Erbai.Core.Hosting;
 namespace Erbai.Modules.GiftFx;
 
 /// <summary>
-/// 礼物特效模块（阶段 5，docs/01 §3.8 框架通道）：GiftEvent → 串行化播放队列
+/// 礼物特效模块（阶段 5， 框架通道）：GiftEvent → 串行化播放队列
 /// （同一时间只播一个）→ OverlayHub WS `giftfx.play {template, nickname, gift,
 /// count, durationSeconds}` → overlay 渲染层（演示横幅 CSS 动画 + 资产扩展点）。
 /// 设置：开关（Enabled 热生效）/ 时长（随载荷下发）。

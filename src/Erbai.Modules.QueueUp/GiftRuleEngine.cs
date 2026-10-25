@@ -4,7 +4,7 @@ using Erbai.Contracts.Live;
 namespace Erbai.Modules.QueueUp;
 
 /// <summary>
-/// 礼物插队规则引擎（docs/01 §3.7 规则表 + 05 §5 bilipdj 行为参考，只参考行为不抄代码）：
+/// 礼物插队规则引擎：
 /// 规则 [{match: 礼物名 或 gold 电池数阈值, action: 插入名次 N / 授予入队资格}]。
 /// 匹配语义：
 /// - gift_name：GiftName 精确匹配（Ordinal，两侧 trim）；
@@ -48,7 +48,7 @@ public static class GiftRuleEngine
 
         if (rule.MatchKind == "coin_threshold")
         {
-            // gold = B站金瓜子 / 抖音电池（LiveEvent.CoinType 归一语义，docs/01 §2）
+            // gold = B站金瓜子 / 抖音电池（LiveEvent.CoinType 归一语义，）
             if (!string.Equals(gift.CoinType, "gold", StringComparison.OrdinalIgnoreCase))
             {
                 return false;

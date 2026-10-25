@@ -5,7 +5,7 @@ using Erbai.Contracts.Players;
 namespace Erbai.Connector.Tests;
 
 /// <summary>
-/// lxmusic 连接器（官方三通道封装，docs/04 §1.3；00 简报：自动化测试全走
+/// lxmusic 连接器（官方三通道封装，；00 简报：自动化测试全走
 /// fake 不打真网）：PlaySelected 构造 music/searchPlay Scheme URL（自搜自播，
 /// source 归一；参考 blive-vod-fork）、Pause 必须走 HTTP、Next/Resume 按
 /// use_http_control 分流、不可编程命令 Unsupported、search 只开搜索页、

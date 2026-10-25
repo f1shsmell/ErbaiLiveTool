@@ -2,7 +2,7 @@ using Erbai.Core.Hosting;
 
 namespace Erbai.Core.Tests;
 
-/// <summary>平台监督者（阶段 4，docs/01 §3.3 单平台重启隔离）：生命周期 / 异常隔离 / 停止超时防双监听。</summary>
+/// <summary>平台监督者（阶段 4， 单平台重启隔离）：生命周期 / 异常隔离 / 停止超时防双监听。</summary>
 public class PlatformSupervisorTests
 {
     private static Func<CancellationToken, Task> RunUntilCanceled() =>

@@ -68,7 +68,7 @@ public sealed class SearchHttpClient : IDisposable
     /// <remarks>Content-Type 固定 application/json，body 按 UTF-8 原文发送（不经过
     /// URI 编码/Uri 规范化）——三源搜索传中文 payload（如 QQ musicu.fcg rpc）必须走
     /// 此路径：JsonSerializer 默认 \uXXXX 转义 + new Uri 对百分号编码的改写，都会让
-    /// 严格的服务端搜不到结果（docs/00 2026-09 QQ musicu.fcg 编码双坑）。</remarks>
+    /// 严格的服务端搜不到结果。</remarks>
     public async Task<string?> PostJsonAsync(string url, string json,
         IReadOnlyDictionary<string, string> headers, CancellationToken ct)
     {

@@ -4,7 +4,7 @@ using Erbai.Contracts.Configuration;
 namespace Erbai.Core.Configuration;
 
 /// <summary>
-/// 配置校验器：类型/枚举/范围规则（docs/03 §4）。校验失败抛 <see cref="ConfigException"/>；成功返回规范化
+/// 配置校验器：类型/枚举/范围规则。校验失败抛 <see cref="ConfigException"/>；成功返回规范化
 /// 副本（归一化枚举/去重/补默认值）。已删：queue.duplicate_scope（quirk #2）、
 /// api.admin_token（决策 #6）。
 /// </summary>

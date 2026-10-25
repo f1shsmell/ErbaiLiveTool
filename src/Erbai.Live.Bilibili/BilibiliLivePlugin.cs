@@ -29,7 +29,7 @@ internal sealed class BilibiliIdleTimeoutException : Exception
 }
 
 /// <summary>
-/// B站弹幕插件（阶段 3，docs/01 §3.2 + 04 §2）：房间初始化链 → WSS 连接 → op=7 认证
+/// B站弹幕插件（阶段 3， + 04 §2）：房间初始化链 → WSS 连接 → op=7 认证
 /// （匿名 uid=0 + buvid3 + Cookie；2025-06 风控下可收弹幕）→ 心跳 30s → 消息解析为
 /// 规范化 <see cref="LiveEvent"/>。
 /// 容错继承 blivedm 语义：InitError（房间元数据/服务器发现瞬时失败）保持客户端存活重试；
@@ -219,7 +219,7 @@ public sealed class BilibiliLivePlugin : LivePluginBase
         }
         catch (Exception ex) when (ex is BilibiliApiException or HttpRequestException)
         {
-            // 兜底默认服务器（docs/04 §2.2）
+            // 兜底默认服务器
             server = DanmuServerInfo.Fallback;
             _logs?.Warning($"[B站] getDanmuInfo 失败（{ex.Message}），兜底 {server.Host}:{server.WssPort}");
         }

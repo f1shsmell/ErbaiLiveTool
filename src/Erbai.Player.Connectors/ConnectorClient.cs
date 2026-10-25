@@ -7,7 +7,7 @@ using Erbai.Contracts.Players;
 namespace Erbai.Player.Connectors;
 
 /// <summary>
-/// NDJSON-stdio 连接器客户端（决策 #15，协议 docs/04 §1.4）：
+/// NDJSON-stdio 连接器客户端（决策 #15，协议 ）：
 /// 拉起子进程 + ping 建连；请求/响应按 id 配对；垃圾非 JSON 行忽略；
 /// 退出/协议超时自动重启（指数退避 1s→15s）；客户端读超时 25s（必须大于
 /// 连接器侧 probe 6s / search 15s / execute 20s）；subscribe 事件驱动快照，
@@ -396,7 +396,7 @@ public sealed class ConnectorClient : IAsyncDisposable
                 _pending.Remove(id);
             }
 
-            // 契约（docs/04 §1.4）：协议超时主动 terminate 僵死进程，否则
+            // 契约：协议超时主动 terminate 僵死进程，否则
             // 子进程 hang 时每个请求固定空等 25s 且永不自愈
             await KillProcessAsync();
             throw new TimeoutException($"connector request {action} timed out after {RequestTimeout.TotalSeconds}s");

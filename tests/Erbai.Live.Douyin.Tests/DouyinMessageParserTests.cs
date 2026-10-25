@@ -4,7 +4,7 @@ using Erbai.Live.Douyin.Messages;
 
 namespace Erbai.Live.Douyin.Tests;
 
-/// <summary>抖音 Grabber 报文归一测试（docs/04 §3.1 字段解析面）。</summary>
+/// <summary>抖音 Grabber 报文归一测试。</summary>
 public class DouyinMessageParserTests
 {
     private static string Envelope(int type, object data) =>

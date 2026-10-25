@@ -24,7 +24,7 @@ public enum QueueUpStatus
 }
 
 /// <summary>
-/// 排队条目（docs/01 §3.7：{id, userId, nickname, content, source, createdAt, status}）。
+/// 排队条目。
 /// 持久化到 queueup_entries 表；活动队列按 created_at 升序 FIFO。
 /// </summary>
 public sealed record QueueUpEntry

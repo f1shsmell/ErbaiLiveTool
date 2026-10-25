@@ -6,7 +6,7 @@ namespace Erbai.Core.Tests;
 
 /// <summary>
 /// 存储引擎（行为域：存储 CAS/序号/备份/写回滚）。
-/// 并发契约见 docs/03 §3.2：序号在 BEGIN IMMEDIATE 内原子分配、CAS 更新、
+/// 并发契约见 ：序号在 BEGIN IMMEDIATE 内原子分配、CAS 更新、
 /// queue_events 审计流、写失败自动回滚。
 /// </summary>
 public class StorageEngineTests

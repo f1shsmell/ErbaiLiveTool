@@ -7,7 +7,7 @@ using Erbai.Live.Douyin.Services;
 
 namespace Erbai.Live.Douyin.Tests;
 
-/// <summary>DouyinUserSync：粉丝团等级 LRU 补查 + 显式标志合并持久化（docs/04 §3.2 业务侧）。</summary>
+/// <summary>DouyinUserSync：粉丝团等级 LRU 补查 + 显式标志合并持久化。</summary>
 public class DouyinUserSyncTests : IAsyncLifetime
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"douyin-usersync-{Guid.NewGuid():N}.db");

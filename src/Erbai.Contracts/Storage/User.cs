@@ -1,7 +1,7 @@
 namespace Erbai.Contracts.Storage;
 
 /// <summary>
-/// 持久化用户（对应 users 表，字段面见 docs/03 §2–§3）。
+/// 持久化用户（对应 users 表，字段面见 –§3）。
 /// UPSERT 语义：昵称覆盖、等级 COALESCE 不降级、特权按调用方显式值覆盖、
 /// request_count 仅 increment 时 +1。
 /// </summary>

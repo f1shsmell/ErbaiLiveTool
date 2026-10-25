@@ -4,7 +4,7 @@ using System.IO.Compression;
 namespace Erbai.Live.Bilibili.Protocol;
 
 /// <summary>
-/// B站直播弹幕 WS 帧协议（docs/04-协议与接口契约.md §2.2）。
+/// B站直播弹幕 WS 帧协议。
 /// 16 字节大端帧头：pack_len u32 / raw_header_size u16 / ver u16 / operation u32 / seq_id u32。
 /// 压缩 ver：0/1 明文，2 zlib，3 brotli（解压后为多个子包，递归切片）。
 /// </summary>

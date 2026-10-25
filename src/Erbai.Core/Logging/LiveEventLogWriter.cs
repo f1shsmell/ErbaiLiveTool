@@ -7,7 +7,7 @@ namespace Erbai.Core.Logging;
 /// <summary>
 /// 直播事件落盘（logs/erbai-live-YYYYMMDD.log，按天滚动，UTF-8 JSON 行）。
 /// 目的：直播事件（弹幕/礼物/进房…）只走 EventBus 内存广播，日志页没打开就永远错过；
-/// 落盘后日志页打开时回看当天事件（docs/00 修复记录：日志页"只有工具类"）。
+/// 落盘后日志页打开时回看当天事件（历史修复记录：日志页"只有工具类"）。
 /// - 写入点：AppServices 平台 runner 桥接（bus.Publish 同处），B站/抖音共用；
 /// - 行格式：单行 JSON（字段短名，正文不换行），可被 <see cref="TryParseLine"/> 读回；
 /// - 失败不抛异常（与 LogBus 同铁律：日志路径绝不拖垮业务）；Dispose 刷缓冲。

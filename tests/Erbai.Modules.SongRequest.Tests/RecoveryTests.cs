@@ -4,7 +4,7 @@ using Erbai.Contracts.Requests;
 namespace Erbai.Modules.SongRequest.Tests;
 
 /// <summary>
-/// 重启恢复（恢复域，docs/03 §1.4）：
+/// 重启恢复（恢复域，）：
 /// queued 重入内存 pending；searching/ready/dispatched → failed/recovered_after_restart
 /// （歌可能已发到播放器，重放会重复播）；stop 清空内存 pending 防 stop→start 双入队。
 /// </summary>

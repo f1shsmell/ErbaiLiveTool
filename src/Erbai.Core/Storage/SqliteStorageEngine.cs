@@ -8,7 +8,7 @@ using Microsoft.Data.Sqlite;
 namespace Erbai.Core.Storage;
 
 /// <summary>
-/// SQLite 存储引擎（docs/03 §3）：WAL、专用线程串行化、BEGIN IMMEDIATE 内
+/// SQLite 存储引擎：WAL、专用线程串行化、BEGIN IMMEDIATE 内
 /// MAX(sequence)+1 原子分配、CAS 更新（expected_statuses + 流转表校验）、
 /// queue_events 状态审计流、schema_meta 版本化迁移框架、SQLite backup API
 /// 一致性备份。v1 schema 一次建终态（干净库，无旧迁移史）。
@@ -253,7 +253,7 @@ public sealed class SqliteStorageEngine : IStorageEngine
     }
 
     /// <summary>
-    /// 窗口内提交计数（点歌频率限制，docs/03 §1.2 检查序）：该
+    /// 窗口内提交计数（点歌频率限制， 检查序）：该
     /// (platform, room_id, user_id) 自 since 起状态非 rejected 的请求行数。
     /// 计入 failed（搜索也消耗资源），排除 rejected（被拒提交不重复惩罚）。
     /// created_at 为固定宽 ISO-8601 文本，字典序即时间序。
@@ -726,7 +726,7 @@ public sealed class SqliteStorageEngine : IStorageEngine
         }, ct);
 
     /// <summary>
-    /// 跨房间特权 MAX（docs/03 §2 读取侧）：同一 (platform, user_id) 的全部 room_id
+    /// 跨房间特权 MAX：同一 (platform, user_id) 的全部 room_id
     /// 行取 MAX(is_admin)/MAX(is_anchor)。不按 room_id 过滤的原因见接口注释——
     /// 按 room_id 精确匹配会漏掉 RoomId 缺失（''）或直播间号变化的记录。
     /// </summary>
@@ -1309,7 +1309,7 @@ public sealed class SqliteStorageEngine : IStorageEngine
 
         var now = UtcNowIso();
         using var command = connection.CreateCommand();
-        // UPSERT 语义（docs/03 §2）：
+        // UPSERT 语义：
         // 昵称覆盖；等级 COALESCE 不降级（传入 NULL 保持旧值）；特权显式覆盖
         // （is_admin/is_anchor 直接写传入值，可撤销）；request_count 仅
         // increment 时 +1 并同步 last_request_at。

@@ -5,7 +5,7 @@ using Erbai.Modules.SongRequest.Search;
 namespace Erbai.Modules.SongRequest.Tests;
 
 /// <summary>
-/// Worker 派发循环（派发域，docs/03 §1.3）：
+/// Worker 派发循环（派发域，）：
 /// FIFO 按 sequence、CAS 置 searching/dispatched、先置 current 再发事件、
 /// 异常显式结算绝不逃逸。
 /// </summary>

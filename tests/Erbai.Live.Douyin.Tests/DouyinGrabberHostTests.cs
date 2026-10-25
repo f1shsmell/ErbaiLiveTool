@@ -7,7 +7,7 @@ using Erbai.Live.Douyin.Hosting;
 
 namespace Erbai.Live.Douyin.Tests;
 
-/// <summary>Fake 注册表（ISystemProxyStore）：绝不打真注册表（docs/04 §3.2 可测性缝）。</summary>
+/// <summary>Fake 注册表（ISystemProxyStore）：绝不打真注册表。</summary>
 internal sealed class FakeProxyStore : ISystemProxyStore
 {
     public ProxySnapshot Current { get; set; } = new();
@@ -378,7 +378,7 @@ public class DouyinGrabberHostTests
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("就绪"));
     }
 
-    // ── 阶段 4 修复回归（docs/00 修复记录） ─────────────────────────────────
+    // ── 阶段 4 修复回归（历史修复记录） ─────────────────────────────────
 
     [Fact]
     public async Task 启动被取消时回收进程并还原代理()

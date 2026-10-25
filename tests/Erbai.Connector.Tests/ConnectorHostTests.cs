@@ -6,7 +6,7 @@ using Erbai.Contracts.Players;
 namespace Erbai.Connector.Tests;
 
 /// <summary>
-/// 宿主 NDJSON 服务端循环（协议域，docs/04 §1.4）：
+/// 宿主 NDJSON 服务端循环（协议域，）：
 /// ping/probe/search/execute 路由、垃圾行容忍、未知 action/player、命令映射。
 /// 真实 Erbai.Connector.exe 子进程直驱（与生产形态一致）。
 /// </summary>

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- 点歌模块：11 态状态机 / 权限 / 搜索源 / 播放状态机（阶段 2，行为契约见 docs/03） -->
+  <!-- 点歌模块：11 态状态机 / 权限 / 搜索源 / 播放状态机（阶段 2，行为契约见 ） -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>

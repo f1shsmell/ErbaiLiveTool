@@ -6,7 +6,7 @@ using Erbai.Contracts.Logging;
 
 namespace Erbai.Live.Douyin.Hosting;
 
-/// <summary>Grabber 宿主运行选项（端口/路径/配置全部可注入，docs/04 §3.1 可测性缝）。</summary>
+/// <summary>Grabber 宿主运行选项（端口/路径/配置全部可注入， 可测性缝）。</summary>
 public sealed record DouyinGrabberHostOptions
 {
     /// <summary>抓包器 exe 路径（可注入；默认由组合根解析到应用目录 DouyinBarrageGrab/）。</summary>
@@ -21,7 +21,7 @@ public sealed record DouyinGrabberHostOptions
 
     public int ProxyPort { get; init; } = 8827;
 
-    /// <summary>端口就绪探测次数（默认 30×250ms，docs/04 §3.2）。</summary>
+    /// <summary>端口就绪探测次数（默认 30×250ms，）。</summary>
     public int ReadyProbeAttempts { get; init; } = 30;
 
     public int ReadyProbeIntervalMs { get; init; } = 250;
@@ -52,7 +52,7 @@ public sealed record GrabberStatus
 }
 
 /// <summary>
-/// 抖音抓包器子进程宿主（docs/04 §3.2 容错全量继承）：
+/// 抖音抓包器子进程宿主：
 /// - 配置下发：白名单 19 键 JSON（-config）写入临时文件，启动参数传入（取代改 .config XML）；
 /// - 系统代理：启动前清理残留死代理；sysProxy 启用时快照；stop 仅当当前代理仍指向
 ///   <c>127.0.0.1:proxyPort</c> 才还原快照（绝不碰用户自己的 Clash 等代理）并广播刷新；
@@ -88,7 +88,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// 运行时更新抓包器配置（重启平台前由组合根按最新 AppConfig 调用，docs/00 阶段 4 #2 修复）：
+    /// 运行时更新抓包器配置（重启平台前由组合根按最新 AppConfig 调用， 阶段 4 #2 修复）：
     /// 白名单键/WS 端口/代理端口 随配置热刷新，不再依赖 CreateAsync 时的快照。
     /// </summary>
     public void UpdateConfig(
@@ -216,7 +216,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
 
         // 端口就绪探测 30×0.25s；超时回收刚启动的进程（避免残留占端口）。
         // 启动被取消（ct）同样必须回收：进程已拉起、代理已快照、配置已写盘，
-        // 不清理会留孤儿进程 + 系统代理劫持（docs/00 修复记录 #3）
+        // 不清理会留孤儿进程 + 系统代理劫持（历史修复记录 #3）
         try
         {
             for (var i = 0; i < _options.ReadyProbeAttempts; i++)
@@ -242,7 +242,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
         return new GrabberStatus { Error = "port_not_ready" };
     }
 
-    /// <summary>停止抓包器并还原系统代理（幂等；docs/04 §3.2 铁律）。</summary>
+    /// <summary>停止抓包器并还原系统代理（幂等； 铁律）。</summary>
     public async Task StopAsync()
     {
         Process? process;
@@ -258,7 +258,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
         }
 
         // Fallback：端口仍活但本实例不持有进程（adopted 外部服务 / 上轮强杀遗留的
-        // 孤儿）：按端口找 PID 并杀——"stop" 绝不静默 no-op（旧契约 docs/04 §3.2）。
+        // 孤儿）：按端口找 PID 并杀——"stop" 绝不静默 no-op（旧契约 ）。
         // 身份校验：只有进程名与抓包器 exe 匹配才杀——端口默认 8888 很常用，
         // 无差别强杀会误杀恰好占端口的无关程序（taskkill /T /F 不可逆）
         if (await PortReadyAsync())
@@ -286,7 +286,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
 
     /// <summary>启动时清理上次强杀残留的系统代理（指向已死的抓包器端口时关闭）。
     /// 不按本次 sysProxy 开关门控：上次崩溃时可能 sysProxy=true 设过代理而本次
-    /// 配置已改 false——残留代理仍会劫持系统流量，必须清（docs/00 修复记录 #8）。</summary>
+    /// 配置已改 false——残留代理仍会劫持系统流量，必须清（历史修复记录 #8）。</summary>
     public async Task CleanupLeftoverProxyAsync()
     {
         var current = await Task.Run(_proxy.Read);
@@ -365,7 +365,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
         }
     }
 
-    /// <summary>按端口找监听 PID（Windows netstat；旧 douyin_grabber_manager 兜底逻辑移植，docs/04 §3.2）。</summary>
+    /// <summary>按端口找监听 PID（Windows netstat；旧 douyin_grabber_manager 兜底逻辑移植，）。</summary>
     internal async Task<int?> FindPidOnPortAsync()
     {
         var port = _options.WsPort;
@@ -419,7 +419,7 @@ public sealed class DouyinGrabberHost : IAsyncDisposable
     }
 
     /// <summary>taskkill 树杀（/T 子进程树 + /F 强杀；App 已整体提权，普通 taskkill 即可，
-    /// 旧版的 UAC RunAs 变体在提权环境下不可达，不再移植——见 docs/00 修复记录 #6）。</summary>
+    /// 旧版的 UAC RunAs 变体在提权环境下不可达，不再移植——见 历史修复记录 #6）。</summary>
     internal async Task<bool> KillPidAsync(int pid)
     {
         return await Task.Run(() => KillPidCore(pid));

@@ -7,7 +7,7 @@ namespace Erbai.Core.Tests;
 /// 存储域补齐（阶段 2 里程碑 1）：users / banned_users / banned_songs /
 /// idle_playlist 语义 + SqliteExecutor 关闭竞态修复。
 /// 行为对齐（test_save_user_writes_privileges_*、
-/// test_list_users_filters_*、test_set_user_admin_*）与 docs/03 §2–§3。
+/// test_list_users_filters_*、test_set_user_admin_*）与 –§3。
 /// </summary>
 public class StorageDomainTests
 {
@@ -45,7 +45,7 @@ public class StorageDomainTests
         };
 
     /// <summary>
-    /// 跨房间特权 MAX（docs/03 §2 读取侧）：同一 (platform, user_id) 多房间行取 MAX。
+    /// 跨房间特权 MAX：同一 (platform, user_id) 多房间行取 MAX。
     /// 复刻实测形态——特权行在真实房间号下，另有一条 RoomId 缺失（''）的普通行。
     /// </summary>
     [Fact]

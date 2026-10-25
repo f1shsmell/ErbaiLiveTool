@@ -2,6 +2,9 @@
 
 抖音 / B站直播弹幕驱动的点歌与互动工具。Windows 桌面应用（.NET 8 + WinAppSDK）。
 
+[![CI](https://github.com/f1shsmell/ErbaiLiveTool/actions/workflows/ci.yml/badge.svg)](https://github.com/f1shsmell/ErbaiLiveTool/actions/workflows/ci.yml)
+[![Release](https://github.com/f1shsmell/ErbaiLiveTool/actions/workflows/release.yml/badge.svg)](https://github.com/f1shsmell/ErbaiLiveTool/actions/workflows/release.yml)
+
 <p align="center"><img src="docs/assets/screenshot.png" alt="ErbaiLiveTool 概览" width="760"></p>
 
 ## 功能

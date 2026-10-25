@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 namespace BarrageGrab
 {
     /// <summary>
-    /// 宿主下发配置（阶段 4 定稿，docs/04 §3.1「启动参数 + JSON 配置文件」）。
+    /// 宿主下发配置（阶段 4 定稿，「启动参数 + JSON 配置文件」）。
     /// 取代旧版"改 .exe.config XML appSettings"：宿主把白名单 19 键序列化为平铺
     /// JSON（键名与 Erbai.Contracts.GrabberAppSettings 一致）经 -config 参数下发。
     /// 校验规则：

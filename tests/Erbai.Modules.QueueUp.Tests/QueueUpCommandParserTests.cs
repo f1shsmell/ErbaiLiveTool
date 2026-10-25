@@ -1,6 +1,6 @@
 namespace Erbai.Modules.QueueUp.Tests;
 
-/// <summary>弹幕排队命令解析（docs/01 §3.7 入口面）。</summary>
+/// <summary>弹幕排队命令解析。</summary>
 public class QueueUpCommandParserTests
 {
     [Fact]

@@ -127,7 +127,7 @@ public class SearchTests
     [Fact]
     public async Task QqMusic_PostJsonBody_NoUnicodeEscape_NoQueryData_EncodingPitfalls()
     {
-        // 编码双坑回归（2026-09，docs/00）：QQ musicu.fcg 必须 POST body 发送原始
+        // 编码双坑回归（2026-09，）：QQ musicu.fcg 必须 POST body 发送原始
         // UTF-8 中文——① JsonSerializer 默认 \uXXXX 转义服务器不认；② rpc 放 query
         // 会经 new Uri 规范化改写百分号编码（%22 变裸引号/中文原样），酷狗/网易云
         // 宽容而 QQ 严格。测试钉住：POST + body 无 \u 转义 + 中文原文 + URL 无 data 参数。

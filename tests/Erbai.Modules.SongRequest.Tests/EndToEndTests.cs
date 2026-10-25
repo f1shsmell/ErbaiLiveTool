@@ -11,7 +11,7 @@ namespace Erbai.Modules.SongRequest.Tests
     using SongRequest = Erbai.Contracts.Requests.SongRequest;
 
 /// <summary>
-/// 阶段 2 退出标准（docs/00）：测试弹幕注入可完成点歌→播放→切歌全链路。
+/// 阶段 2 退出标准：测试弹幕注入可完成点歌→播放→切歌全链路。
 /// dummy 平台注入（不经真实抖音/B站），搜索走 fake 处理器，播放走可编程
 /// FakePlayer——整条链真实运转：弹幕命令 → 提交流水线 → worker 派发 →
 /// 播放状态机 → 终态事件。
@@ -229,7 +229,7 @@ public class EndToEndTests
     [Fact]
     public async Task Skip_WhenQueueEmpty_PausesPlayer()
     {
-        // 修复回归（docs/00 #14）：操作员"跳过"后队列空 → 播放器必须收到 Pause，
+        // 修复回归：操作员"跳过"后队列空 → 播放器必须收到 Pause，
         // 否则 lxmusic 等外部播放器无限继续放最后那首歌
         var (store, queue, commands, player) = await CreateE2eAsync();
         var probes = 0;
@@ -302,7 +302,7 @@ public class EndToEndTests
     [Fact]
     public async Task Dispatch_AllCandidatesRejected_ImmediatelyFails()
     {
-        // 修复回归（docs/00 #21）：全部候选派发被拒 → 立即 failed（all_sources_rejected），
+        // 修复回归：全部候选派发被拒 → 立即 failed（all_sources_rejected），
         // 不再死等 15s 起播超时（旧行为下 3s 内等不到 failed，此测试自然区分）
         var (store, queue, commands, player) = await CreateE2eAsync();
         player.Outcome = PlayerOutcome.Rejected; // 唯一候选(kugou)被拒
@@ -322,7 +322,7 @@ public class EndToEndTests
     [Fact]
     public async Task Dispatch_FirstRejected_SecondAccepted_PlaysSecondCandidate()
     {
-        // 修复回归（docs/00 #21）：首候选被拒 → 立即试下一候选并成功派发，
+        // 修复回归：首候选被拒 → 立即试下一候选并成功派发，
         // 状态机从成功候选继续（已拒的前置候选不进换源列表）
         var (store, queue, commands, player) = await CreateE2eAsync();
         queue.Processor = (_, _) => Task.FromResult<IReadOnlyList<SongSearchResult>?>(
@@ -353,7 +353,7 @@ public class EndToEndTests
     [Fact]
     public async Task Dispatch_SingleSourcePlayer_FiltersCrossSourceCandidate()
     {
-        // 修复回归（docs/00 #22）：播放器=netease 时，跨源候选（kugou）不被派发——
+        // 修复回归：播放器=netease 时，跨源候选（kugou）不被派发——
         // 旧行为把酷狗 hash 喂给网易云桥产生误导性 invalid-song-id；只试自家源候选
         var (store, queue, commands, player) = await CreateE2eAsync();
         player.Key = "netease";

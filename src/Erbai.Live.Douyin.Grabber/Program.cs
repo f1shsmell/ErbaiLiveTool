@@ -51,7 +51,7 @@ namespace BarrageGrab
 
             StartWatchdog();
 
-            // 宿主下发配置（阶段 4，docs/04 §3.1）：-config <path> 平铺 19 键白名单 JSON。
+            // 宿主下发配置（阶段 4，）：-config <path> 平铺 19 键白名单 JSON。
             // 失败即报错退出（返回码 3），绝不带残缺配置继续跑——宿主据此判启动失败回收进程。
             var hostConfigPath = TryGetHostConfigPath(args);
             if (hostConfigPath != null)
@@ -81,7 +81,7 @@ namespace BarrageGrab
                 Console.Error.WriteLine($"程序初始化错误: {ex.Message}");
                 GrabberState.Error("init failed: " + ex.Message);
                 // init 失败非零退出（区别于 -config 失败的 3）：宿主/冒烟工具据此
-                // 立即识别启动失败，不用等端口探测超时（docs/00 修复记录 #11）
+                // 立即识别启动失败，不用等端口探测超时（历史修复记录 #11）
                 Environment.ExitCode = 4;
                 exited = true;
             }

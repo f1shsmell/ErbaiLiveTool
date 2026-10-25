@@ -1,7 +1,7 @@
 using Erbai.Connector;
 using Erbai.Connector.LxMusic;
 
-// 连接器宿主 exe（决策 #15）：NDJSON-stdio 服务端循环，协议规范见 docs/04 §1.4。
+// 连接器宿主 exe（决策 #15）：NDJSON-stdio 服务端循环，协议规范见 。
 //
 // 本进程只承载 **lxmusic 原生后端**。网易云 / 酷狗 / QQ 音乐 / Folia 已改为插件形态：
 // 由用户按清单安装上游第三方连接器（各自独立的 exe），本进程既不实现也不分发它们。

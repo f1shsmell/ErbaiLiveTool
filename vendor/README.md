@@ -1,7 +1,7 @@
 # vendor/
 
 Awoo 播放器连接器（`Awoo.Connector.*.exe`，NDJSON-stdio 协议，协议规范见
-`docs/04-协议与接口契约.md` §1.4）。
+` §1.4）。
 
 **角色（2026-08-23 决策 #15 起）**：连接器接入上游（`Erbai.Connector`），本目录的
 vendor exe **不再随应用复用/发布**，仅作两项用途：① 读配套源码理解机制与数值

@@ -4,7 +4,7 @@ namespace Erbai.Modules.SongRequest.Playback;
 
 /// <summary>
 /// 播放状态机全部时间参数（可注入 options record——旧测试靠 patch 常量到
-/// 0.05–0.1s 跑完 996 行判定矩阵，C# 不留此缝移植不了，见 docs/00 阶段 2
+/// 0.05–0.1s 跑完 996 行判定矩阵，C# 不留此缝移植不了，见  阶段 2
 /// 开工简报「两个可测性缝」）。
 /// </summary>
 public sealed record PlaybackOptions

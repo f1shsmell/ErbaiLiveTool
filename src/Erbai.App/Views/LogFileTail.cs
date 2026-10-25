@@ -8,7 +8,7 @@ namespace Erbai.App.Views;
 ///
 /// 背景：日志页打开时要回看当日日志，但当日文件可能积累数十万行。若先全量读入
 /// 再裁剪（旧 <c>ReadAllLinesShared</c>），打开日志页会做全文件 I/O + 逐行处理，
-/// 是"打开日志页卡很久"的主要来源（docs/00 修复记录）。本类只解码文件最尾部
+/// 是"打开日志页卡很久"的主要来源（历史修复记录）。本类只解码文件最尾部
 /// ≤<paramref name="maxLines"/> 行的窗口：从文件尾部向前分块扫换行，攒够即停。
 /// </summary>
 internal static class LogFileTail

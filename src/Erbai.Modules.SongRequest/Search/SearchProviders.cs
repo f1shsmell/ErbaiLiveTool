@@ -9,7 +9,7 @@ namespace Erbai.Modules.SongRequest.Search;
 /// 端点：酷狗 mobilecdn.kugou.com/api/v3/search/song（hash 作 songmid + types 带
 /// 128k/320k/flac hash）；网易云 music.163.com/api/search/get/web（id 作 songmid，
 /// 毫秒转秒，多歌手 "/" 连接）；QQ c.y.qq.com/.../client_search_cp（songmid +
-/// strMediaMid 必传，封面拼 y.gtimg.cn）。docs/03 §5。
+/// strMediaMid 必传，封面拼 y.gtimg.cn）。。
 /// </summary>
 public abstract class SearchProvider
 {
@@ -57,7 +57,7 @@ public abstract class SearchProvider
             : fallback;
 }
 
-/// <summary>酷狗搜索源（docs/03 §5：hash 作 songmid，types 带三档 hash）。</summary>
+/// <summary>酷狗搜索源。</summary>
 public sealed class KugouSearchProvider : SearchProvider
 {
     private const string Url = "http://mobilecdn.kugou.com/api/v3/search/song";
@@ -155,7 +155,7 @@ public sealed class KugouSearchProvider : SearchProvider
     }
 }
 
-/// <summary>网易云搜索源（docs/03 §5：id 作 songmid，毫秒转秒，多歌手 "/" 连接）。</summary>
+/// <summary>网易云搜索源。</summary>
 public sealed class NeteaseSearchProvider : SearchProvider
 {
     private const string WebUrl = "https://music.163.com/api/search/get/web";
@@ -172,7 +172,7 @@ public sealed class NeteaseSearchProvider : SearchProvider
         string keyword, bool preferHot, int limit, CancellationToken ct)
     {
         // 双端点并发，成功即用：原单端点（search/get/web）慢/超时时整单被拖到上限
-        // （docs/00 修复记录 #19）；任一成功即返回，全失败返回空
+        // （历史修复记录 #19）；任一成功即返回，全失败返回空
         var tasks = new[]
         {
             SearchEndpointAsync(WebUrl, keyword, preferHot, ct),
@@ -281,8 +281,7 @@ public sealed class NeteaseSearchProvider : SearchProvider
     }
 }
 
-/// <summary>QQ 音乐搜索源（docs/03 §5：mid 作 songmid，media_mid 作 strMediaMid，
-/// 封面拼 y.gtimg.cn；2026-09 迁移 musicu.fcg——client_search_cp 已下线/风控 500）。</summary>
+/// <summary>QQ 音乐搜索源。</summary>
 public sealed class QqMusicSearchProvider : SearchProvider
 {
     private const string Url = "https://u.y.qq.com/cgi-bin/musicu.fcg";
@@ -330,7 +329,7 @@ public sealed class QqMusicSearchProvider : SearchProvider
 
     /// <summary>主通道：musicu.fcg 统一搜索接口(POST body 携带 JSON-RPC，
     /// DoSearchForQQMusicDesktop 现役方法,须 grp:1 否则空列表)；返回 req_0.data.body.song.list。
-    /// 编码双坑(2026-09 实测,docs/00)：① JsonSerializer 默认把中文转义成 \uXXXX,
+    /// 编码双坑(2026-09 实测,)：① JsonSerializer 默认把中文转义成 \uXXXX,
     /// QQ 服务器不认 → 搜不到；必须 UnsafeRelaxedJsonEscaping 输出原始 UTF-8 中文。
     /// ② query 里 data 参数经 new Uri 规范化会被改写编码(%22 变裸引号、中文原样),
     /// 酷狗/网易云宽容、QQ 严格 → 必须 POST body 发送。</summary>
@@ -508,7 +507,7 @@ public sealed class QqMusicSearchProvider : SearchProvider
         var sizeFlac = file is { } f ? Text(Find(f, "size_flac"), "0") : "0";
         var mediaMid = file is { } g ? Text(Find(g, "media_mid")) : "";
         // songid/songtype：QQ 原生插队（/playbysongid id_0=={songid}&&songtype_0=={songtype}）必需，
-        // 否则 QqMusicConnector.ParsePayload 拿不到载荷、每个候选都被拒（docs/00 用户实测"QQ 音乐无法点歌"）
+        // 否则 QqMusicConnector.ParsePayload 拿不到载荷、每个候选都被拒
         long.TryParse(Text(Find(first, "id"), "0"), out var songId);
         int.TryParse(Text(Find(first, "type"), "0"), out var songType);
         var types = new List<SongType>();

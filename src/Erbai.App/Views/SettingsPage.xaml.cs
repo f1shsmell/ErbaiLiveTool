@@ -23,7 +23,7 @@ public sealed partial class SettingsPage : Page
         RefreshBackupList();
     }
 
-    // ---- 点歌队列（docs/00 修复记录 #16：数量限制可配置）----
+    // ---- 点歌队列（历史修复记录 #16：数量限制可配置）----
 
     private void InitQueueSection(AppConfig settings)
     {

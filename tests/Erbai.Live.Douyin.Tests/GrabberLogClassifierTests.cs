@@ -2,7 +2,7 @@ using Erbai.Live.Douyin.Hosting;
 
 namespace Erbai.Live.Douyin.Tests;
 
-/// <summary>Grabber stdout 行分级（docs/04 §3.2：中文 token + 英文 errors 正则 + "N errors" 误报剔除）。</summary>
+/// <summary>Grabber stdout 行分级。</summary>
 public class GrabberLogClassifierTests
 {
     [Theory]

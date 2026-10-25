@@ -24,7 +24,7 @@
 
             <!-- 目录式插件（Plugins/，决策 #4/#16 + Stage A）：列表 + 启停 + 配置项只读 -->
             <TextBlock Text="目录式插件" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,4" />
-            <TextBlock Text="第三方插件按目录放置（每插件一子目录 + config.ini，见 docs/07）：关闭即时卸载，开启即时生效（新放入的插件目录需重启后加载）。"
+            <TextBlock Text="第三方插件按目录放置（每插件一子目录 + config.ini，见 ）：关闭即时卸载，开启即时生效（新放入的插件目录需重启后加载）。"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8" />
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
                 <TextBlock Text="{x:Bind PluginRootText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11" VerticalAlignment="Center" />

@@ -14,7 +14,7 @@ namespace Erbai.Live.Douyin.Tests;
 
 /// <summary>
 /// 阶段 4 退出标准端到端（自动化）：fake WS 推送 {Type,Data} → DouyinLivePlugin → EventBus →
-/// LiveEventBridge → 点歌命令 → 队列。参照阶段 3 的假 WS 服务器模式（docs/00 阶段 4 开工简报）。
+/// LiveEventBridge → 点歌命令 → 队列。参照阶段 3 的假 WS 服务器模式。
 /// </summary>
 public class EndToEndTests
 {

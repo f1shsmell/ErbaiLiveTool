@@ -9,7 +9,7 @@ using Erbai.Core.Logging;
 namespace Erbai.Modules.GiftFx.Tests;
 
 /// <summary>
-/// 礼物特效框架通道（docs/01 §3.8）：GiftEvent → 串行化播放队列 →
+/// 礼物特效框架通道：GiftEvent → 串行化播放队列 →
 /// OverlayHub `giftfx.play {template, nickname, gift, count, durationSeconds}`；
 /// 开关热生效；非 Gift 忽略；overlay 未装配不崩溃；启停独立。
 /// </summary>

@@ -227,7 +227,7 @@ public sealed partial class DanmakuLogPage : Page
             }
         });
 
-        // 工具事件：点歌流水（入队/播放/完成/跳过/失败原因等）——docs/00 修复记录 #18
+        // 工具事件：点歌流水（入队/播放/完成/跳过/失败原因等）——历史修复记录 #18
         _queueSub = services.Bus.Subscribe<QueueEventEnvelope>(capacity: 256);
         var queue = _queueSub;
         _ = Task.Run(async () =>
@@ -367,7 +367,7 @@ public sealed partial class DanmakuLogPage : Page
     /// 读取当日直播事件落盘文件（erbai-live-YYYYMMDD.log，LiveEventLogWriter 写入；JSON 行）
     /// 尾部作为回看——直播事件原本只走内存广播，事后打开日志页永远看不到；
     /// 落盘后这里把当天事件还原为纯数据（LiveEvent），供 UI 线程转结构化行
-    /// （docs/00 修复记录）。**后台线程调用：只读文件+JSON 解析，不碰任何 UI 对象**
+    /// （历史修复记录）。**后台线程调用：只读文件+JSON 解析，不碰任何 UI 对象**
     /// （DanmakuLogLine 含 SolidColorBrush，WinUI 线程亲和，一律留在 UI 线程构造）。
     /// </summary>
     private static void LoadLiveHistoryData(List<LiveEvent> events, List<(string Text, LogLevel Level)> errors)
@@ -470,7 +470,7 @@ public sealed partial class DanmakuLogPage : Page
     /// 只读日志文件尾部 ≤maxLines 行（共享句柄，兼容 Serilog 写入）。
     /// 旧实现 <c>ReadAllLinesShared</c> 先全量读入再裁剪：当日日志可能很大
     /// （直播事件/系统日志一天可积累数十万行），打开日志页时全文件 I/O +
-    /// 逐行处理是"打开卡很久"的主因之一（docs/00 修复记录 #20 基础上再优化）。
+    /// 逐行处理是"打开卡很久"的主因之一（历史修复记录 #20 基础上再优化）。
     /// 这里委托 <see cref="LogFileTail.ReadTailLinesShared"/>：从文件尾部向前
     /// 分块扫换行，攒够 maxLines 即停，只解码尾部窗口（纯逻辑已抽离可单测）。
     /// </summary>
@@ -655,7 +655,7 @@ public sealed partial class DanmakuLogPage : Page
         _ => "其他",
     };
 
-    /// <summary>点歌流水格式化（queue.* 事件 → 工具日志行；docs/00 修复记录 #18）。</summary>
+    /// <summary>点歌流水格式化（queue.* 事件 → 工具日志行；历史修复记录 #18）。</summary>
     private static string FormatQueue(QueueEventEnvelope envelope)
     {
         var data = envelope.Data;

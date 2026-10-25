@@ -5,7 +5,7 @@ using Erbai.Live.Bilibili.Protocol;
 namespace Erbai.Live.Bilibili.Login;
 
 /// <summary>
-/// B站凭据持久化（docs/04 §2.3）：
+/// B站凭据持久化：
 /// credentials.json 信封 <c>{"v":2,"cipher":"dpapi"|"plain","payload":base64}</c>；
 /// Windows 用 DPAPI（CryptProtectData，禁止 UI 标志 0x1，失败绝不落明文）；
 /// 原子写（临时文件 + fsync + replace）；旧版明文 JSON 自动迁移。

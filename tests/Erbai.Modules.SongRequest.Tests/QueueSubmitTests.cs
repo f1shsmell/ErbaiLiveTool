@@ -7,7 +7,7 @@ namespace Erbai.Modules.SongRequest.Tests;
 
 /// <summary>
 /// 提交流水线与权限（提交/权限域）。
-/// 检查顺序不可变（docs/03 §1.2）：黑名单 → 重复点歌 → 队满 → 单用户上限；
+/// 检查顺序不可变：黑名单 → 重复点歌 → 队满 → 单用户上限；
 /// 拒绝必须持久化 + 发事件。
 /// </summary>
 public class QueueSubmitTests
@@ -90,7 +90,7 @@ public class QueueSubmitTests
     public async Task Submit_AdminAndAnchor_BypassLevelGates_ButNotQueueRules()
     {
         // 等级门槛只对普通观众生效（admin/anchor 直通）；队满/上限/去重
-        // 是队列管理规则，对所有人生效（docs/03 §1.2 重复检查语义同样覆盖 admin）。
+        // 是队列管理规则，对所有人生效。
         var config = TestHarness.DefaultConfig() with
         {
             Permissions = TestHarness.DefaultConfig().Permissions with { DouyinMinFanLevel = 10 },

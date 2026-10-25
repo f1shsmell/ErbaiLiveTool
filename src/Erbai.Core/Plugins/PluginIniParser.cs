@@ -4,7 +4,7 @@ using Erbai.Contracts.Plugins;
 namespace Erbai.Core.Plugins;
 
 /// <summary>
-/// 插件 config.ini 解析器（只读元数据；格式契约见 docs/07 §2，字段面忠实 FufuLauncher）：
+/// 插件 config.ini 解析器（只读元数据；格式契约见 ，字段面忠实 FufuLauncher）：
 /// - 注释行（; 或 # 开头）与空行忽略；键名大小写不敏感（OrdinalIgnoreCase），值 trim；
 /// - [General] 固定键：Name/File/Version 必需，Description/Developer/Enabled/ContractVersion 可选；
 /// - 其余每个 section = 一个自定义配置项（Key=section 名，内含 Name/Type/Value）；

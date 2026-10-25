@@ -9,7 +9,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 namespace Erbai.App.Services;
 
 /// <summary>
-/// B站扫码登录窗口（docs/01 §3.1：WinUI 内容窗口 + QRCoder 生成二维码，无浏览器）。
+/// B站扫码登录窗口。
 /// ContentDialog 内渲染二维码图片 + 状态文本；用户关闭对话框即取消登录轮询。
 /// </summary>
 public static class QrLoginDialog

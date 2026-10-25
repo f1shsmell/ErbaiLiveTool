@@ -5,7 +5,7 @@
     产出两种发布形态（同一份 publish 产物）：
       1) dotnet publish 三个发布工程（App 多文件 FDD / Connector 多文件 / Grabber 单文件 FDD）
          —— App 多文件（2026-08-28，#17 悬浮窗的 lib_manual 经典托管 WebView2 与单文件
-         bundle 互操作不兼容，见 docs/02 #14 修订），产物统一汇入 publish\（脚本会先清空该目录，
+         bundle 互操作不兼容，见  #14 修订），产物统一汇入 publish\（脚本会先清空该目录，
          保证可复现）；
       2) 删除 *.pdb 并断言发布清单后，调 ISCC 编译 installer\ErbaiLiveTool.iss
          → 安装版 Setup.exe（正式分发，≤ 120MB 断言）；

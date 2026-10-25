@@ -4,7 +4,7 @@ using Erbai.Contracts.Players;
 namespace Erbai.Connector;
 
 /// <summary>
-/// NDJSON-stdio 服务端循环（决策 #15，协议 docs/04 §1.4）：
+/// NDJSON-stdio 服务端循环（决策 #15，协议 ）：
 /// stdin 逐行读 JSON（垃圾非 JSON 行忽略不中断），按请求 player 字段路由到
 /// 平台连接器（首次请求某平台即激活，同一时间只激活一个平台），stdout 写
 /// 响应；subscribe 请求启动快照事件推送（有事件源的平台）。请求处理带
@@ -133,7 +133,7 @@ public sealed class ConnectorHost
         typeof(ConnectorHost).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 
     /// <summary>
-    /// ping 元数据（docs/04 §1.4）。形状对齐上游 awoo 连接器实测响应：
+    /// ping 元数据。形状对齐上游 awoo 连接器实测响应：
     /// <c>connectorId</c> = 平台键（上游健康检查按它比对连接器身份）、
     /// <c>capabilities</c> = 命令级布尔对象、<c>features</c> = 能力名数组。
     /// 响应顶层的 <c>protocolCapabilities</c> 字符串数组（旧形状）保持不变，

@@ -70,7 +70,7 @@ public sealed record BilibiliNavInfo
 }
 
 /// <summary>
-/// B站直播 HTTP 面（docs/04 §2.2 房间初始化链 + §2.3 登录端点）：
+/// B站直播 HTTP 面：
 /// buvid3 → get_info → getDanmuInfo(WBI) → nav/直播间查询/扫码轮询等登录端点。
 /// Cookie 由本类自管（请求头注入 + 响应 Set-Cookie 落容器），与注入的
 /// HttpMessageHandler 无关——测试用 fake handler 即可全链路模拟，不打真网。

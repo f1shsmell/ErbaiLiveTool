@@ -1,6 +1,6 @@
 namespace Erbai.Modules.QueueUp;
 
-/// <summary>排队弹幕命令（docs/01 §3.7 最小版入口面）。</summary>
+/// <summary>排队弹幕命令。</summary>
 public enum QueueUpCommandKind
 {
     /// <summary>「排队 [内容]」——入队；已在队中则更新自己的内容（用户已确认语义）。</summary>

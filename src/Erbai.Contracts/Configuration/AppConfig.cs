@@ -2,7 +2,7 @@
 
 /// <summary>
 /// 应用配置树（强类型；已删：queue.duplicate_scope（无消费方的 quirk）、api.admin_token（决策 #6）。
-/// 校验规则见 docs/03 §4 与 Erbai.Core.Configuration.ConfigValidator。
+/// 校验规则见  与 Erbai.Core.Configuration.ConfigValidator。
 /// </summary>
 public sealed record AppConfig
 {
@@ -220,7 +220,7 @@ public sealed record OverlayWindowItemConfig
 
     /// <summary>悬浮窗样式参数（预案 B 样式参数化，2026-08-29；参考 AwooMusicBot/bilipdj/blivechat
     /// 的 style.json 模式——强调色/字号/描边/发光/不透明度均可配置，设置页实时生效。
-    /// 点歌/排队走 GDI+ 自绘渲染器，弹幕走 WPF（Erbai.OverlayWpf）——映射见 docs/02 #17 修订）。</summary>
+    /// 点歌/排队走 GDI+ 自绘渲染器，弹幕走 WPF（Erbai.OverlayWpf）——映射见  #17 修订）。</summary>
     public OverlayWindowStyleConfig Style { get; init; } = new();
 }
 
@@ -284,7 +284,7 @@ public sealed record DouyinGrabberConfig
 {
     public string ExecutablePath { get; init; } = "";
 
-    /// <summary>抓包器 appSettings 白名单（19 键，docs/03 §4）；未知键报错。</summary>
+    /// <summary>抓包器 appSettings 白名单（19 键，）；未知键报错。</summary>
     public IReadOnlyDictionary<string, object> AppSettings { get; init; } = GrabberAppSettings.CreateDefault();
 }
 

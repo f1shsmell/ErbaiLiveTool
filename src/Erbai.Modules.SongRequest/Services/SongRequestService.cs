@@ -139,7 +139,7 @@ public sealed class SongRequestService
     /// <summary>
     /// 切歌：终态跳过队首。**不再向播放器发原生 Next**——播放器 Next 切的是它自己
     /// 播放列表的"别的歌"，会先放别的歌才轮到队列派发的下一首（用户实测 2026-08-27，
-    /// 替代旧「skip_first + 播放器切歌」契约，docs/03 §1 已同步修订）；队列下一首由
+    /// 替代旧「skip_first + 播放器切歌」契约， 已同步修订）；队列下一首由
     /// Worker 经 PlaySelected 直接切歌。队列本就无活动请求时显式触发空闲挂起，
     /// 否则播放器会继续放（实测「没歌时切歌还放歌」）。
     /// </summary>
@@ -164,7 +164,7 @@ public sealed class SongRequestService
     /// 特权有两个来源——平台事件标志（房管/主播标记）与持久化记录。「设置管理员@XX」
     /// 写的就是 users.is_admin，平台事件永远不会为应用内设置的管理员打标；抖音主播
     /// 的弹幕也常常不带 anchor 标志（Grabber 报文体差异）。只看事件标志会让这两类
-    /// 人一律被拒。存储侧「特权合并不降级」语义见 docs/03 §2——此前该语义只在
+    /// 人一律被拒。存储侧「特权合并不降级」语义见 ——此前该语义只在
     /// 写入侧与 bilibili 提交流水线生效，读取侧（本方法）是缺口。
     ///
     /// 查询必须<b>跨房间</b>（<see cref="IStorageEngine.GetUserPrivilegeAsync"/>），

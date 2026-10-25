@@ -21,7 +21,7 @@ namespace Erbai.Web;
 internal sealed record OverlayHubEnvelope(string Channel, JsonElement Payload, DateTimeOffset Timestamp);
 
 /// <summary>
-/// Overlay HTTP/WS 服务（docs/04 §4.1 保留设计，决策 #6 只服务 overlay）：
+/// Overlay HTTP/WS 服务：
 /// - 页面 /overlay、/overlay/default.css；公开端点 /api/v1/overlay/config；
 /// - /api/v1/* 与 /api/v1/events(WS) 无鉴权（2026-09 移除 overlay token：服务器回环绑定
 ///   127.0.0.1 已隔离外部网络；OBS 浏览器源为同机应用；业界弹幕姬/点歌机本地页均无鉴权）；

@@ -13,7 +13,7 @@ public sealed record ProxySnapshot
 }
 
 /// <summary>
-/// 系统代理注册表访问隔离接口（docs/04 §3.2 可测性缝：测试 fake 注册表，绝不打真注册表）。
+/// 系统代理注册表访问隔离接口。
 /// 宿主只通过此接口读写 WinINET 代理；实现 <see cref="WinInetProxyStore"/>。
 /// </summary>
 public interface ISystemProxyStore

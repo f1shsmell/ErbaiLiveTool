@@ -31,7 +31,7 @@ namespace Erbai.OverlayWpf;
 internal sealed class WpfDanmakuWindow : Window
 {
     // bililive_dm Store 默认动画参数（MainOverlayEffect1-4 / MainOverlayFontsize）；
-    // 运行时值来自 OverlayWindowStyleConfig.Effect*（设置页可调，见 docs/02 #17 修订）。
+    // 运行时值来自 OverlayWindowStyleConfig.Effect*（设置页可调，见  #17 修订）。
     private const double BaseFontSize = 18.667;
     private const string DefaultFontFamily = "Microsoft YaHei";
 

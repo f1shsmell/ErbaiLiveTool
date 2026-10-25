@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Erbai.Live.Douyin.Tests;
 
-/// <summary>Grabber 宿主下发配置解析（HostConfig，docs/04 §3.1 + §3.2）：白名单 19 键、未知键报错、
+/// <summary>Grabber 宿主下发配置解析（HostConfig， + §3.2）：白名单 19 键、未知键报错、
 /// 类型校验、端口/间隔范围、pushFilter 强制保留 Type=7。</summary>
 public class HostConfigTests
 {

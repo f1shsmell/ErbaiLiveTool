@@ -10,7 +10,7 @@ using Erbai.Core.Storage;
 namespace Erbai.Modules.QueueUp.Tests;
 
 /// <summary>
-/// 模块级端到端（docs/01 §3.7）：LiveEvent 弹幕命令（排队/取消排队/完成）→
+/// 模块级端到端：LiveEvent 弹幕命令（排队/取消排队/完成）→
 /// 队列变化；「完成」仅 admin/anchor；Gift 事件走规则引擎（插队/授资格）；
 /// 模块启停独立（Dispose 后事件不再消费，重启恢复队列）。
 /// </summary>

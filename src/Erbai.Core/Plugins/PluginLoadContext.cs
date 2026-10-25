@@ -5,7 +5,7 @@ namespace Erbai.Core.Plugins;
 
 /// <summary>
 /// 插件程序集的 AssemblyLoadContext（决策 #4 的 ALC 动态加载）。
-/// 解析规则（共享式契约，docs/07 §3/§4 的落地，Stage A M5 后扩展为宿主优先）：
+/// 解析规则（共享式契约，/§4 的落地，Stage A M5 后扩展为宿主优先）：
 /// - <b>宿主优先</b>：先尝试解析到宿主默认 ALC（Default 已加载的程序集一律共享——
 ///   内置插件依赖 Erbai.Core 等宿主程序集、第三方插件引用的宿主导出契约都走这里，
 ///   <b>不加载插件目录里的同名副本</b>，规避 ALC 双版本冲突）；

@@ -4,7 +4,7 @@ using Erbai.Contracts.Live;
 namespace Erbai.Live.Douyin.Messages;
 
 /// <summary>
-/// 抖音 Grabber WS 报文解析 → 规范化 <see cref="LiveEvent"/>（docs/04 §3.1 字段解析面）。
+/// 抖音 Grabber WS 报文解析 → 规范化 <see cref="LiveEvent"/>。
 /// 信封 <c>{Type, Data}</c>：Type=1 弹幕 / 2 点赞 / 3 进入 / 4 关注 / 5 礼物 / 6 统计（忽略）/
 /// 7 粉丝团 / 8 分享 / 9 下播；Data 是需二次解析的 JSON 字符串（Type=9 无 Data）。
 /// 字段多形态归一：文本 Content/Msg/Message、身份键 ADMIN_IDENTITY_KEYS/ANCHOR_IDENTITY_KEYS
@@ -161,7 +161,7 @@ public static class DouyinMessageParser
         }
     }
 
-    /// <summary>Type=9 下播（无 Data；docs/04 §3.1）。</summary>
+    /// <summary>Type=9 下播（无 Data；）。</summary>
     private static LiveEvent ParseOffline(JsonElement envelope)
     {
         return new LiveEvent

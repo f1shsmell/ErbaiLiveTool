@@ -4,7 +4,7 @@ using Erbai.Contracts.Live;
 namespace Erbai.Modules.QueueUp.Tests;
 
 /// <summary>
-/// 礼物插队规则引擎（docs/01 §3.7 规则表）：礼物名精确匹配 / gold 电池数阈值 /
+/// 礼物插队规则引擎：礼物名精确匹配 / gold 电池数阈值 /
 /// 按配置顺序第一条命中 / 非 Gift 事件不匹配。
 /// </summary>
 public class GiftRuleEngineTests

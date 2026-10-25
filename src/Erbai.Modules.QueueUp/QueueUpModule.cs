@@ -8,7 +8,7 @@ using Erbai.Core.Hosting;
 namespace Erbai.Modules.QueueUp;
 
 /// <summary>
-/// 排队队列模块（阶段 5，docs/01 §3.7 最小版）：订阅 LiveEvent——
+/// 排队队列模块（阶段 5， 最小版）：订阅 LiveEvent——
 /// Danmaku 解析「排队/取消排队/完成」命令，Gift 走礼物插队规则引擎
 /// （insert_at 自动插队 / grant_eligibility 授予资格）。
 /// 状态经 EventBus queueup.* 事件 → overlay 排队看板频道 + WinUI 排队队列页。
@@ -60,7 +60,7 @@ public sealed class QueueUpModule : IFeatureModule, IQueueUpModule
         await Service.StartAsync(ct);
         _started = true;
         // 独立于传入 ct 的订阅循环：DisposeAsync 自持取消，宿主 Stop 不依赖 Start 的 token 存活；
-        // cts 每次 Start 重建（模块可 Dispose 后重启，docs/00 退出标准「插件启停互不影响」）
+        // cts 每次 Start 重建（模块可 Dispose 后重启， 退出标准「插件启停互不影响」）
         _cts = new CancellationTokenSource();
         _subscription = context.EventBus.Subscribe<LiveEvent>(capacity: 256);
         _loopTask = ModuleLoops.RunConsumerLoopAsync(
@@ -148,7 +148,7 @@ public sealed class QueueUpModule : IFeatureModule, IQueueUpModule
             case QueueUpCommandKind.Complete:
             {
                 // 「完成」为管理命令：仅 admin/anchor 可执行；普通观众静默忽略。
-                // 特权判定与点歌切歌一致（docs/03 §2）：弹幕事件标志缺失时回落
+                // 特权判定与点歌切歌一致：弹幕事件标志缺失时回落
                 // 持久化用户（「设置管理员@XX」只写 users 表，平台弹幕永远不会为
                 // 它打 admin 标；跨房间 MAX 合并由存储层负责）——否则主播在应用内
                 // 配的管理员无法用「完成」推进队首。

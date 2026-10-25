@@ -1,6 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <!-- WinUI 3 主程序：组合根。发布配方照抄 FufuLauncher（docs/05 §1，验证过的组合：
-       TFM 26100 + WASDK 2.2.0 + WinUIEx 2.9.1 + H.NotifyIcon 2.2.0）。 -->
+  <!-- WinUI 3 主程序：组合根。发布配方照抄 FufuLauncher。 -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
@@ -21,7 +20,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
-    <!-- 发布形态（决策 #14/#17，决策史与取舍见 docs/02）：FDD（.NET 8 Desktop 运行时由安装器
+    <!-- 发布形态（决策 #14/#17，决策史与取舍见 ）：FDD（.NET 8 Desktop 运行时由安装器
          自动部署）+ WinAppSDK 自带 + Inno Setup 安装器，安装包 ≤120MB。
          多文件发布（PublishSingleFile=false）：曾因悬浮窗 lib_manual WebView2 与单文件 bundle
          不兼容而改多文件；#17 预案 B 已弃用 WebView2 改自绘，单文件约束理论解除，保持多文件现状。
@@ -32,7 +31,7 @@
   </PropertyGroup>
 
   <!-- 悬浮窗（决策 #17 预案 B，2026-09 修订）：点歌/排队 = UpdateLayeredWindow + GDI+ 自绘；
-       弹幕 = WPF 方案（Erbai.OverlayWpf 库，bililive_dm 同款），细节见 docs/02 #17。 -->
+       弹幕 = WPF 方案（Erbai.OverlayWpf 库，bililive_dm 同款），细节见  #17。 -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
   </ItemGroup>

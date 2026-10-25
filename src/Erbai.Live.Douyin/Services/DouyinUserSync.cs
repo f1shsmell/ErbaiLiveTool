@@ -9,7 +9,7 @@ using Erbai.Live.Douyin.Messages;
 namespace Erbai.Live.Douyin.Services;
 
 /// <summary>
-/// 抖音用户持久化同步（docs/04 §3.2，与 LiveEventBridge 平级）：
+/// 抖音用户持久化同步：
 /// - 粉丝团等级 LRU 缓存 5000（普通弹幕缺等级时补查，防长播无限增长）；
 /// - 信号量 50 限流并发持久化（粉丝团事件洪泛不撑爆 DB 线程）；
 /// - 显式标志精细语义：管理员/主播 flag 只有携带真值才覆盖持久化特权
@@ -178,7 +178,7 @@ public static class DouyinUserSync
     /// <summary>从原始报文重算"显式标志"（FlagIsExplicit 语义，旧 handle_danmaku 平移）。
     /// 扫描面必须与 DouyinMessageParser 一致（Data 顶层 + Data.User 两层）：
     /// 只扫 User 时顶层身份键（如 Data.IsModerator="0" 的显式否定）不会触发降级语义
-    /// （docs/00 修复记录 #9）。</summary>
+    /// （历史修复记录 #9）。</summary>
     private static (bool HasExplicitAdmin, bool HasExplicitAnchor) ExtractExplicitFlags(string? rawJson)
     {
         if (string.IsNullOrWhiteSpace(rawJson))

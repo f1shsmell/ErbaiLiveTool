@@ -10,7 +10,7 @@ namespace Erbai.Modules.SongRequest.Playback
     using SongRequest = Erbai.Contracts.Requests.SongRequest;
 
     /// <summary>
-    /// 播放状态机（判定矩阵，docs/03 §1.5）：
+    /// 播放状态机（判定矩阵，）：
     /// 候选源换源（error/起播超时/刚播即断 → 下一候选，1s 冷却）、起播 15s 超时、
     /// 总预算兜底（时长 + 缓冲，无时长仅缓冲，兜底 300s）、刚播即停双条件判定、
     /// 暂停卡死 10s 观察窗、手动切歌识别（相似度 0.62 阈值全套歌名匹配）、
@@ -112,7 +112,7 @@ namespace Erbai.Modules.SongRequest.Playback
             public int ConsecutiveErrors;
         }
 
-        // ---- 未开播分支（docs/03 §1.5）----
+        // ---- 未开播分支----
 
         private async Task<bool> HandleNotStartedAsync(
             SongRequest request,
@@ -311,7 +311,7 @@ namespace Erbai.Modules.SongRequest.Playback
             return false;
         }
 
-        // ---- next 对账守卫（docs/03 §1.5；quirk #1 修正：队首读 queued）----
+        // ---- next 对账守卫----
 
         private DateTimeOffset _guardAttemptAt = DateTimeOffset.MinValue;
         private int _guardMismatchCount;
@@ -455,7 +455,7 @@ namespace Erbai.Modules.SongRequest.Playback
             }
 
             // 自然结算（播完/手动切歌/失败）后队列已空且无空闲歌可播 → 暂停播放器
-            // （docs/00 修复记录 #14；lxmusic 等外部播放器播完列表不会自停）
+            // （历史修复记录 #14；lxmusic 等外部播放器播完列表不会自停）
             await _queue.PausePlayerWhenIdleAsync(ct);
         }
 
@@ -534,7 +534,7 @@ namespace Erbai.Modules.SongRequest.Playback
             return SongQueueService.ParseIntervalSeconds(candidate.Interval);
         }
 
-        /// <summary>开播识别/手动切歌识别的歌名匹配（docs/03 §1.5 全套算法）。</summary>
+        /// <summary>开播识别/手动切歌识别的歌名匹配。</summary>
         internal bool SongIdentifiersMatch(PlayerSnapshot snapshot, SongSearchResult result, SongRequest request)
         {
             var expectedName = SongKey.Normalize(result.Name.Length > 0 ? result.Name : request.SongName);

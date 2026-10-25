@@ -11,7 +11,7 @@ namespace Erbai.Modules.SongRequest.Tests
     using SongRequest = Erbai.Contracts.Requests.SongRequest;
 
 /// <summary>
-/// 播放状态机判定矩阵（关键场景，docs/03 §1.5）：
+/// 播放状态机判定矩阵（关键场景，）：
 /// 换源（error/起播超时/刚播即断）、预算、刚播即停双条件、暂停卡死观察窗、
 /// 手动切歌识别、next 对账守卫、探测失败结算。时间参数全部注入缩短值。
 /// </summary>
@@ -480,7 +480,7 @@ public class PlaybackStateMachineTests
         Assert.Equal("playback_wait_error", (await store.GetRequestAsync(request.RequestId!.Value))!.FailureReason);
     }
 
-    // ---- 歌名匹配算法（docs/03 §1.5 全套）----
+    // ---- 歌名匹配算法----
 
     [Theory]
     [InlineData("晴天", "周杰伦", "晴天", "周杰伦", true)]      // 完全相同
@@ -507,7 +507,7 @@ public class PlaybackStateMachineTests
         Assert.True(PlaybackStateMachine.Similarity("abcdef", "abcxyz") < 0.62);
     }
 
-    // ---- next 对账守卫（docs/03 §1.5；quirk #1：队首读 queued）----
+    // ---- next 对账守卫----
 
     [Fact]
     public async Task Guard_InsertsNext_ThenArmsAfterConsecutiveMismatches()

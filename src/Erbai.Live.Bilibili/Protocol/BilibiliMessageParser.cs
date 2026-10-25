@@ -4,8 +4,7 @@ using Erbai.Contracts.Live;
 namespace Erbai.Live.Bilibili.Protocol;
 
 /// <summary>
-/// B站弹幕 WS 业务消息解析 → 规范化 <see cref="LiveEvent"/>（docs/04 §2.2 消息解析面；
-/// 保留结构化用户名偏好）。
+/// B站弹幕 WS 业务消息解析 → 规范化 <see cref="LiveEvent"/>。
 /// 解析失败/不识别的 cmd 返回 null（不影响循环）。
 /// </summary>
 public static class BilibiliMessageParser

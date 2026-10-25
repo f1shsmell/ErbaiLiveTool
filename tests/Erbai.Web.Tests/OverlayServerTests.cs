@@ -12,7 +12,7 @@ using Erbai.Core.Events;
 namespace Erbai.Web.Tests;
 
 /// <summary>
-/// Overlay HTTP/WS（docs/04 §4.1）：
+/// Overlay HTTP/WS：
 /// 公开端点（2026-09 起无 token——回环绑定 + OBS 同机）、端口上探、
 /// WS 事件信封（connected + queue.* 附快照）。
 /// </summary>

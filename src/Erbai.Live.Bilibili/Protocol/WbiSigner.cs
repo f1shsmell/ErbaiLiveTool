@@ -4,7 +4,7 @@ using System.Text;
 namespace Erbai.Live.Bilibili.Protocol;
 
 /// <summary>
-/// WBI 签名（docs/04-协议与接口契约.md §2.2）：
+/// WBI 签名：
 /// nav 接口 wbi_img 拿 img_url/sub_url → 文件名拼 64 字符 → KEY_MAP 重排取前 32 = mixin key；
 /// 参数按键排序、值剔除 <c>!'()*</c>、追加 wts，URL 编码拼串 + mixin key 后 MD5 = w_rid。
 /// </summary>

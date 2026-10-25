@@ -8,7 +8,7 @@ using Erbai.Core.Storage;
 namespace Erbai.Modules.QueueUp.Tests;
 
 /// <summary>
-/// 排队队列核心（docs/01 §3.7 最小版）：FIFO 入队 / 重复排队更新内容（用户已确认）/
+/// 排队队列核心：FIFO 入队 / 重复排队更新内容（用户已确认）/
 /// 取消 / 完成队首 / 队满拒绝 / 资格门槛 / 礼物插队名次 / queueup.* 事件附快照 /
 /// 重启恢复（created_at 序，插队位置不跨重启）。
 /// </summary>

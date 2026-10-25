@@ -189,7 +189,7 @@ public sealed class AppServices : IAsyncDisposable
     {
         // 单文件发布下 AppContext.BaseDirectory 指向 %TEMP%\.net\<App>\<hash>\ 解压缓存，
         // 随附文件（config/logs/数据库/DouyinBarrageGrab/Erbai.Connector.exe 等）必须按
-        // 宿主 exe 目录定位，否则全被错误定位到 Temp（docs/00 修复记录 #13）
+        // 宿主 exe 目录定位，否则全被错误定位到 Temp（历史修复记录 #13）
         var baseDir = AppPaths.HostDir;
 
         // ── 底座（需异步初始化/失败不拖垮主程序的部分先建，再注册进容器）──
@@ -257,7 +257,7 @@ public sealed class AppServices : IAsyncDisposable
                 sp.GetRequiredService<IStorageEngine>(),
                 sp.GetRequiredService<IEventBus>(),
                 sp.GetRequiredService<ConfigStore>().Settings);
-            queue.Logs = sp.GetRequiredService<ILogBus>(); // 队列链路诊断落盘（docs/00 修复记录 #15）
+            queue.Logs = sp.GetRequiredService<ILogBus>(); // 队列链路诊断落盘（历史修复记录 #15）
             return queue;
         });
         services.AddSingleton<SongBlacklist>();
@@ -476,7 +476,7 @@ public sealed class AppServices : IAsyncDisposable
         // 平台监督者（阶段 4）：统一管理平台监听循环，单平台重启隔离。
         // runner 每次启动读 config.Settings 现值（不捕获 CreateAsync 时的快照）——
         // 概览页先 PersistAsync 再启动，若 runner 用旧快照，改房间号/白名单后
-        // 点启动仍按旧值连（docs/00 阶段 4 修复记录 #2）。
+        // 点启动仍按旧值连。
         var bilibili = provider.GetRequiredService<BilibiliLivePlugin>();
         var grabberHost = provider.GetRequiredService<DouyinGrabberHost>();
         var douyin = provider.GetRequiredService<DouyinLivePlugin>();
@@ -599,7 +599,7 @@ public sealed class AppServices : IAsyncDisposable
         {
             var uri = new Uri(wsUrl);
             // Uri.Port 对未显式带端口的 ws:// URL 返回 scheme 默认值 80——
-            // 必须按"是否显式端口"判断，否则兜底 8888 失效（docs/00 修复记录 #10）
+            // 必须按"是否显式端口"判断，否则兜底 8888 失效（历史修复记录 #10）
             if (!uri.IsDefaultPort)
             {
                 return uri.Port;

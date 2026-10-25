@@ -6,7 +6,7 @@ using Erbai.Contracts.QueueUp;
 namespace Erbai.Modules.QueueUp;
 
 /// <summary>
-/// 排队队列核心（docs/01 §3.7 最小版）：FIFO 队列 + 弹幕命令（排队/取消排队/完成）
+/// 排队队列核心：FIFO 队列 + 弹幕命令（排队/取消排队/完成）
 /// + 礼物插队规则引擎。单一事实源 = 内存有序队列，写库持久化（重启按 created_at
 /// 恢复——插队位置不跨重启，最小版限制，交接说明注明）。
 /// 事件：queueup.added/updated/completed/cancelled/rejected（附完整快照）。

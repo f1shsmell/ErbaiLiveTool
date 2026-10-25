@@ -39,7 +39,7 @@ public sealed record BilibiliLoginResult
 }
 
 /// <summary>
-/// B站登录（docs/04 §2.3）：nav 校验 → cookie/info 需刷新则
+/// B站登录：nav 校验 → cookie/info 需刷新则
 /// refresh+confirm → 都不行走扫码（generate → 2s×180 轮询）→ DPAPI 凭据持久化。
 /// ⚠️ correspond_path 是旧版 MD5 简化实现而非官方 RSA（临时方案）：
 /// 原样移植并标记，B站若严格校验该字段刷新会失效，届时需引入 RSA 实现；失败兜底重新扫码。

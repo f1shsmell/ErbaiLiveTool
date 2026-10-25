@@ -4,7 +4,7 @@ namespace Erbai.Modules.SongRequest.Search;
 
 /// <summary>
 /// 多源搜索编排（平移旧 backend/song_request_service.py _search_candidates +
-/// search_common 韧性层，docs/03 §5）：
+/// search_common 韧性层，）：
 /// - 所有启用源并发搜索，失败源跳过（RecoverableSearchException 计熔断），
 ///   候选按 providers.enabled 配置顺序排列；每源只取第一首候选（恢复初版
 ///   "选用候选第一个"逻辑，去除后续加入的多候选/原唱锁定二次搜索等复杂度，
@@ -126,7 +126,7 @@ public sealed class SearchCoordinator
         try
         {
             // 单源超时上限：避免卡顿源(如网易云)拖到 HttpClient 10s/端点，
-            // 整单点歌等几十秒（docs/00 修复记录 #19）
+            // 整单点歌等几十秒（历史修复记录 #19）
             using var sourceTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             sourceTimeout.CancelAfter(TimeSpan.FromSeconds(5));
             results = await provider.SearchFirstAsync(keyword, _preferHot, sourceTimeout.Token)

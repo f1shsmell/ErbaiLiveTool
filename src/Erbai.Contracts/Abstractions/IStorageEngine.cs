@@ -6,7 +6,7 @@ namespace Erbai.Contracts.Abstractions;
 
 /// <summary>
 /// 存储引擎契约（阶段 1 面）：SQLite 引擎 + song_requests 域方法。
-/// 并发契约（docs/03 §3.2）：所有访问经专用写线程串行化；写失败自动回滚；
+/// 并发契约：所有访问经专用写线程串行化；写失败自动回滚；
 /// 序号在 BEGIN IMMEDIATE 事务内原子分配；状态更新为 CAS（expected_statuses
 /// + 流转表校验，不符返回 null）；每次状态变化写 queue_events 审计流。
 /// </summary>
@@ -74,7 +74,7 @@ public interface IStorageEngine : IAsyncDisposable
     /// </summary>
     Task<(int EventsDeleted, int RequestsDeleted)> PruneHistoryAsync(DateTimeOffset cutoff, CancellationToken ct = default);
 
-    // ---- users 域（docs/03 §2–§3：UPSERT 语义/特权合并不降级）----
+    // ---- users 域----
 
     /// <summary>
     /// UPSERT：昵称覆盖、等级 COALESCE 不降级、特权按传入值显式覆盖、
@@ -85,7 +85,7 @@ public interface IStorageEngine : IAsyncDisposable
     Task<User?> GetUserAsync(string platform, string roomId, string userId, CancellationToken ct = default);
 
     /// <summary>
-    /// 跨房间特权查询（docs/03 §2「特权合并不降级」的<b>读取侧</b>）：同一
+    /// 跨房间特权查询：同一
     /// (platform, user_id) 在多个 room_id 下可能有记录——弹幕事件的 RoomId 可能缺失
     /// （落库为 ''）、直播间号也可能变化——任一房间是管理员/主播即视为有特权。
     /// 与 <see cref="ListUsersAsync"/> 的跨房间 MAX 语义一致；无记录返回 (false, false)。
@@ -150,7 +150,7 @@ public interface IStorageEngine : IAsyncDisposable
     /// <summary>整体替换空闲歌单（保留传入顺序；空歌名条目剔除）。</summary>
     Task SaveIdleSongsAsync(IReadOnlyList<IdleSong> songs, CancellationToken ct = default);
 
-    // ---- queueup_entries 域（docs/03 §3.1；阶段 5 排队模块）----
+    // ---- queueup_entries 域----
 
     /// <summary>插入排队条目（created_at 升序 FIFO）。</summary>
     Task<QueueUpEntry> InsertQueueUpEntryAsync(QueueUpEntry entry, CancellationToken ct = default);

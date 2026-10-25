@@ -85,7 +85,7 @@ public sealed class PluginLoaderOptions
 }
 
 /// <summary>
-/// 目录式插件加载器（决策 #4/#16 落地，docs/07）：
+/// 目录式插件加载器（决策 #4/#16 落地，）：
 /// 枚举 <c>Plugins/</c> 下每插件一子目录 → 解析 config.ini → 校验契约版本与启停标记 →
 /// 按插件建可回收 ALC（共享契约 + 目录依赖解析）→ 发现插件类型并实例化 → 注册进 ModuleHost。
 /// 加载/发现异常按目录隔离（单个坏插件不拖垮其余）；卸载 = 停止 + 移除注册 + Dispose + ALC.Unload。
@@ -198,7 +198,7 @@ public sealed class PluginLoader : IAsyncDisposable
         var iniPath = Path.Combine(pluginDir, "config.ini");
         if (!File.Exists(iniPath))
         {
-            const string reason = "缺少 config.ini（每插件目录必须含 config.ini 元数据，见 docs/07）";
+            const string reason = "缺少 config.ini（每插件目录必须含 config.ini 元数据，见 ）";
             RecordDirectory(directoryKey, null, PluginDirectoryStatus.Failed, reason);
             return new(PluginDirectoryStatus.Failed, reason);
         }
@@ -529,7 +529,7 @@ public sealed class PluginLoader : IAsyncDisposable
         if (declared.Major != _hostContractVersion.Major || declared > _hostContractVersion)
         {
             reason = $"契约版本 {declared} 与宿主契约（{_hostContractVersion}）不兼容：" +
-                     "主版本必须一致且不得高于宿主（docs/07 §3）";
+                     "主版本必须一致且不得高于宿主";
             return false;
         }
 
@@ -617,7 +617,7 @@ public sealed class PluginLoader : IAsyncDisposable
             // 无可用插件类型 → 立即回收该 ALC（避免残留已加载程序集）
             alc.Unload();
             throw new InvalidOperationException(
-                $"程序集 {manifest.File} 未发现任何实现 ILivePlatformPlugin / IMusicPlayerPlugin / IFeatureModule 的 public 类型（docs/07 §4）");
+                $"程序集 {manifest.File} 未发现任何实现 ILivePlatformPlugin / IMusicPlayerPlugin / IFeatureModule 的 public 类型");
         }
 
         return entry;

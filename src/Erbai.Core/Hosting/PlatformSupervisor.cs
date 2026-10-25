@@ -27,7 +27,7 @@ public sealed record SupervisorResult
 }
 
 /// <summary>
-/// 平台监督者（阶段 4，docs/01 §3.3「单平台重启隔离」）：
+/// 平台监督者（阶段 4，「单平台重启隔离」）：
 /// - 每个平台一个长驻监听任务（runner：启动 → 事件转发 → 随 ct 取消退出，finally 释放资源）；
 /// - 停止超时（5s）的任务转入 stuck：真正结束后由回调清理；期间拒绝重启同平台
 ///   （否则新旧两个监听并发，弹幕被处理两次——重复点歌/重复入队）；
@@ -101,7 +101,7 @@ public sealed class PlatformSupervisor
         lock (_sync)
         {
             // 复查：等待期间（锁已释放）可能有并发 StartAsync 已拉起新实例——
-            // 不复查会覆盖 _tasks[name] 造成双监听重复事件（docs/00 修复记录 #7）
+            // 不复查会覆盖 _tasks[name] 造成双监听重复事件（历史修复记录 #7）
             if (_tasks.TryGetValue(name, out var running) && !running.IsCompleted)
             {
                 return new SupervisorResult { Name = name, Running = true };

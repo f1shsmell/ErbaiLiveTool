@@ -11,7 +11,7 @@ using Erbai.Live.Douyin.Messages;
 namespace Erbai.Live.Douyin;
 
 /// <summary>
-/// 抖音弹幕插件（阶段 4，docs/01 §3.3 + 04 §3）：连 Grabber 的本地 WS（默认 ws://127.0.0.1:8888），
+/// 抖音弹幕插件（阶段 4， + 04 §3）：连 Grabber 的本地 WS（默认 ws://127.0.0.1:8888），
 /// <c>{Type, Data}</c> 报文经 <see cref="DouyinMessageParser"/> 归一为 <see cref="LiveEvent"/>。
 /// - WS 连接工厂可注入（对齐 BilibiliLivePlugin 的 wsUriFactory 先例；测试用假 WS 服务器）；
 /// - 断线固定延迟重连（默认 5s，旧 run_douyin_client 语义）；

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- DouyinBarrageGrab（ape-byte, MIT）源码迁移 .NET 8（阶段 4 定稿；Spike C 结论见 docs/06 §5）。
+  <!-- DouyinBarrageGrab（ape-byte, MIT）源码迁移 .NET 8（阶段 4 定稿；Spike C 结论见 ）。
        改动面（相对上游 net462）：去 WinForms UI（headless）、去 Costura.Fody（SDK 单文件原生支持）、
        去死引用（BrotliSharpLib/BouncyCastle 顶层 using 无实际调用）、packages.config → PackageReference、
        无 legacy XML 配置时走出厂默认值、Console.ReadKey 重定向输入崩溃修复、串口补 System.IO.Ports。

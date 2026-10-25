@@ -9,7 +9,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `ErbaiLiveTool.iss` | 安装器脚本（参考 FufuLauncher `setup.iss` 配方，见 docs/05 §1） |
+| `ErbaiLiveTool.iss` | 安装器脚本（参考 FufuLauncher `setup.iss` 配方，见 ） |
 | `ChineseSimplified.isl` | 官方社区中文语言文件（Inno Setup 6.5.0+，维护者 Zhenghan Yang（Kira）） |
 | `plugins-template/` | 安装到 `{app}\Plugins\` 的插件目录说明（`README.txt`，内含 config.ini 文本样例与用法、故障排查；不附带样例目录） |
 | `Output/` | 编译产物（不入库，见 .gitignore）：安装版 Setup.exe + 绿色版 zip（测试用）+ 编译日志 |

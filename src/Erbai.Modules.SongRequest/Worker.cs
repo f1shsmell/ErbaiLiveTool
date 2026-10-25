@@ -118,7 +118,7 @@ internal static class Worker
     }
 
     /// <summary>
-    /// 派发单个请求（docs/03 §1.3）：定向状态查询 → CAS searching → processor
+    /// 派发单个请求：定向状态查询 → CAS searching → processor
     /// → CAS dispatched → 先置 _current_request_id 再发事件 → 等待播放。
     /// 任何异常显式结算 failed 并继续（search_failed / 原异常文本）。
     /// </summary>
@@ -178,7 +178,7 @@ internal static class Worker
                 return;
             }
 
-            // 候选按播放器源过滤（docs/00 修复记录 #22）：网易云/酷狗/QQ 音乐这类单源
+            // 候选按播放器源过滤（历史修复记录 #22）：网易云/酷狗/QQ 音乐这类单源
             // 客户端只能播自家源——跨源候选会被路由到当前播放器连接器、产生
             // "CEF 桥拒绝:ERR invalid-song-id"（酷狗 hash 当网易云 id）等误拒；
             // lxmusic（落雪）多源播放器保留全源候选
@@ -223,7 +223,7 @@ internal static class Worker
             // is_current 正确指向刚派发的歌曲
             queue.SetCurrentRequestId(dispatched.RequestId);
             // 逐个候选立即派发：任一成功即停；全部被拒 → 立即失败结算，
-            // 不再死等 15s 起播超时（docs/00 修复记录 #21；旧实现只试首候选，
+            // 不再死等 15s 起播超时（历史修复记录 #21；旧实现只试首候选，
             // 被拒后状态机空等 → "点歌后 15 秒才有结果"）
             var (accepted, acceptedIndex) = await DispatchFirstCandidateAsync(queue, playable, ct);
             if (!accepted)
@@ -282,12 +282,12 @@ internal static class Worker
     }
 
     /// <summary>
-/// 候选按播放器源过滤（docs/00 修复记录 #22）：单源客户端（netease/kugou/qqmusic）
+/// 候选按播放器源过滤（历史修复记录 #22）：单源客户端（netease/kugou/qqmusic）
 /// 只能播自家源的歌——跨源候选会被路由到当前播放器连接器、产生误导性的
 /// "CEF 桥拒绝: invalid-song-id"（酷狗 hash 被当网易云 id）；lxmusic（落雪）是
 /// 多源播放器，保留全源候选。FakePlayer 等非单源 key 不过滤（测试/未知播放器
 /// 用旧语义）。Folia 不在过滤名单：三源不产生 folia 源，若过滤会导致其点歌全空
-/// （与既有行为一致地继续失败在派发阶段，见 docs/00 #22）。
+/// （与既有行为一致地继续失败在派发阶段，见  #22）。
 /// </summary>
     private static IReadOnlyList<SongSearchResult> FilterPlayableCandidates(
         IMusicPlayerPlugin? player, IReadOnlyList<SongSearchResult> result)
@@ -311,7 +311,7 @@ internal static class Worker
         ["netease", "kugou", "qqmusic"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 逐个候选立即派发（docs/00 修复记录 #21）：任一 PlaySelected 成功即停；被拒
+    /// 逐个候选立即派发（历史修复记录 #21）：任一 PlaySelected 成功即停；被拒
     /// 立即试下一候选（旧实现只试第一个，被拒后状态机死等 15s 起播超时才换源）。
     /// 返回 (是否至少一个候选被接受, 被接受候选的索引)。
     /// </summary>
@@ -376,7 +376,7 @@ internal static class Worker
         if (songs.Count == 0)
         {
             // 空闲歌单为空（或已清空）：队列无事可做时要挂起播放器，
-            // 否则最后一首空闲歌会无限继续放（docs/00 修复记录 #14）
+            // 否则最后一首空闲歌会无限继续放（历史修复记录 #14）
             await queue.PausePlayerWhenIdleAsync(ct);
             return false;
         }
@@ -484,7 +484,7 @@ internal static class Worker
             // 新点歌唤醒 → 立即返回打断空闲播放。注意：唤醒信号是单次可消费的
             // Channel bool，绝不能在消费后继续循环——否则信号被本次读掉、下一轮
             // WaitIdleWakeupAsync 无信号可等，只能等空闲歌自然播完才切到点歌队列
-            //（观众点歌被长时间推迟，docs/00 修复记录：空闲歌单不立即切走）。
+            //（观众点歌被长时间推迟，历史修复记录：空闲歌单不立即切走）。
             // 因此这里用唤醒信号与 500ms 轮询窗口竞争，谁先到处理谁。
             using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var wake = queue.WaitIdleWakeupAsync(pollCts.Token);

@@ -3,7 +3,7 @@ using System;
 namespace BarrageGrab
 {
     /// <summary>
-    /// headless 结构化状态日志（阶段 4 定稿，docs/04 §3.2「状态走 stdout 结构化日志」）。
+    /// headless 结构化状态日志（阶段 4 定稿，「状态走 stdout 结构化日志」）。
     /// 宿主（Erbai.Live.Douyin.DouyinGrabberHost）从 stdout 逐行读取，识别
     /// <c>[grabber-state]</c> 前缀行并解析 JSON 状态；其余行按中英文 token 分级。
     /// 状态行只含 ASCII（子进程 stdout 可能被宿主按 GBK 回退解码，避免编码炸）。

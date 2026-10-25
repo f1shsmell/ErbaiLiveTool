@@ -17,7 +17,7 @@ namespace Erbai.Modules.SongRequest.Services
 
 /// <summary>
 /// 点歌队列服务：提交流水线 / 终态操作 / 快照投影 / 事件广播。
-/// 检查顺序不可变（docs/03 §1.2）：用户黑名单 → 等级门槛 → 频率限制 → 重复点歌 →
+/// 检查顺序不可变：用户黑名单 → 等级门槛 → 频率限制 → 重复点歌 →
 /// 队满 → 单用户上限；每条拒绝都持久化 rejected 记录 + 发 queue.rejected 事件。
 /// Worker 派发循环与空闲歌单见 Worker（同程序集），播放状态机里程碑 4 接入，
 /// 搜索处理器由组合根注入。
@@ -36,7 +36,7 @@ public sealed class SongQueueService
     /// <summary>搜索处理器（三源编排，里程碑 5 注入；null = 未配置）。</summary>
     public Func<SongRequest, CancellationToken, Task<IReadOnlyList<SongSearchResult>?>>? Processor { get; set; }
 
-    /// <summary>热更新队列/权限策略（设置页保存后调用；docs/00 修复记录 #16——默认 max_per_user=1
+    /// <summary>热更新队列/权限策略（设置页保存后调用；历史修复记录 #16——默认 max_per_user=1
     /// 且无 UI 入口，用户测试/实际点歌数量都受限）。</summary>
     public void ReloadPolicy(AppConfig config) => Policy.Reload(config);
 
@@ -74,7 +74,7 @@ public sealed class SongQueueService
 
     internal IStorageEngine Store => _store;
 
-    // ---- 提交流水线（顺序不可变，docs/03 §1.2）----
+    // ---- 提交流水线（顺序不可变，）----
 
     public async Task<(SongRequest? Request, PermissionDecision Decision)> SubmitAsync(SongRequest request, CancellationToken ct = default)
     {
@@ -91,7 +91,7 @@ public sealed class SongQueueService
                 : request.CanonicalSongKey;
             request = request with { CanonicalSongKey = canonical };
 
-            // 存储特权合并（docs/03 §2）：弹幕事件拿不到应用内持久化的特权——
+            // 存储特权合并：弹幕事件拿不到应用内持久化的特权——
             // 「设置管理员@XX」写的是 users.is_admin，平台永远不会为它打标；抖音主播的
             // 弹幕也常不带 anchor 标志，且事件 RoomId 可能缺失（落库为空房间行）。
             // 统一按 (platform, userId) 跨房间取 MAX 合并；admin/anchor 只升不降
@@ -113,7 +113,7 @@ public sealed class SongQueueService
                 }
             }
 
-            // 用户黑名单优先于一切其他规则（docs/03 §1.2）——必须在等级门槛之前，
+            // 用户黑名单优先于一切其他规则——必须在等级门槛之前，
             // 否则被拉黑但等级不足的用户得到 level_too_low 而非 user_banned（审计 T1-P6）
             if (!string.IsNullOrEmpty(request.UserId) &&
                 await _store.IsUserBannedAsync(request.Platform, request.RoomId, request.UserId, ct))
@@ -183,7 +183,7 @@ public sealed class SongQueueService
         await EmitAsync("queue.rejected", new QueueEventData { Request = persisted, Decision = decision }, ct);
     }
 
-    // ---- 操作员终态操作（docs/03 §1.6）----
+    // ---- 操作员终态操作----
 
     public Task<SongRequest?> CompleteAsync(long requestId, CancellationToken ct = default) =>
         SetTerminalAsync(requestId, RequestStatus.Completed, ct);
@@ -224,7 +224,7 @@ public sealed class SongQueueService
         }
 
         // 终态后队列已空（无活动/在途/空闲歌可播）→ 暂停播放器。否则 lxmusic
-        // 等外部播放器会无限继续放最后那首歌（docs/00 修复记录 #14）
+        // 等外部播放器会无限继续放最后那首歌（历史修复记录 #14）
         await PausePlayerWhenIdleAsync(ct);
         return request;
     }
@@ -290,7 +290,7 @@ public sealed class SongQueueService
         CancellationToken ct = default) =>
         _store.ListRequestsPageAsync(platform, status, descending, limit, offset, ct);
 
-    // ---- 快照投影（docs/03 §1.6：position 动态重编号；派发固定 FIFO）----
+    // ---- 快照投影----
 
     public async Task<QueueSnapshot> GetSnapshotAsync(int? limit = null, string? order = null, CancellationToken ct = default)
     {
@@ -399,7 +399,7 @@ public sealed class SongQueueService
     {
         Console.WriteLine($"[队列] {message}");
         // WinUI 宿主无控制台：关键错误必须落盘（logs/erbai-*.log）便于事后定位
-        // （docs/00 修复记录 #15：网易云"点不了歌"首候选派发被拒/播放等待异常等）
+        // （历史修复记录 #15：网易云"点不了歌"首候选派发被拒/播放等待异常等）
         Logs?.Warning($"[队列] {message}");
     }
 
@@ -522,7 +522,7 @@ public sealed class SongQueueService
     }
 
     /// <summary>
-    /// 播放等待：播放器已接入时走播放状态机（判定矩阵，docs/03 §1.5）；
+    /// 播放等待：播放器已接入时走播放状态机（判定矩阵，）；
     /// 未接入时降级为时长定时器 fallback——等时长（无时长用总预算兜底），
     /// 可被操作员终态/新请求唤醒提前返回。等待期异常必须结算，
     /// 否则成"幽灵正在播放"。
@@ -645,7 +645,7 @@ public sealed class SongQueueService
         SignalIdleWakeup();
     }
 
-    /// <summary>重启恢复（docs/03 §1.4）：queued 重入队；searching/ready/dispatched 直接置 failed/recovered_after_restart。</summary>
+    /// <summary>重启恢复：queued 重入队；searching/ready/dispatched 直接置 failed/recovered_after_restart。</summary>
     private async Task RecoverAsync(CancellationToken ct)
     {
         var recovered = await _store.ListRequestsAsync(RequestStatuses.Active, ct);

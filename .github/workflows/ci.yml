@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # 同一命令内完成构建+测试（sln 锁 x64 平台，见 README 构建说明）。
+      # 发布工作流（release.yml）发布前也跑同一命令，两处保持一致。
+      - name: Build & Test
+        run: dotnet test ErbaiLiveTool.sln -c Release -p:Platform=x64 --nologo

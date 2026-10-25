@@ -1,7 +1,7 @@
 namespace Erbai.Contracts.Requests;
 
 /// <summary>
-/// 点歌请求领域模型（对应旧 song_requests 表；字段面见 docs/03 §3.1）。
+/// 点歌请求领域模型（对应旧 song_requests 表；字段面见 ）。
 /// </summary>
 public sealed record SongRequest
 {

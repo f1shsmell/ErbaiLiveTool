@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Erbai.Contracts.Players;
 
 /// <summary>
-/// 连接器 NDJSON-stdio 协议模型（决策 #15，规范 docs/04 §1.4，v1.1 实测
+/// 连接器 NDJSON-stdio 协议模型（决策 #15，规范 ，v1.1 实测
 /// 差异：字符串 id / camelCase 字段 / search 裸数组 / 命令枚举 camelCase）。
 /// 两端（Erbai.Connector 宿主 + Erbai.Player.Connectors 客户端）共享本模型，
 /// 协议演进内部化。
@@ -72,7 +72,7 @@ public static class ConnectorProtocol
     };
 
     /// <summary>
-    /// 解析 ping 响应为能力面（docs/04 §1.4）。同时兼容两种来源并合并：
+    /// 解析 ping 响应为能力面。同时兼容两种来源并合并：
     /// ① 上游规范形状——能力在 <c>result</c> 内（<c>features</c> 字符串数组 +
     /// <c>capabilities</c> 布尔对象，见上游 Awoo.Connector.*.exe 实测响应）；
     /// ② 本仓库旧宿主形状——能力在响应<b>顶层</b> <c>protocolCapabilities</c> 字符串数组。
@@ -311,7 +311,7 @@ public sealed record ConnectorCapabilitySet
 }
 
 /// <summary>
-/// ping 元数据（能力协商面，docs/04 §1.4）。上游连接器把能力放在 ping 的
+/// ping 元数据（能力协商面，）。上游连接器把能力放在 ping 的
 /// <c>result</c> 内；本仓库旧宿主放在响应顶层 <c>protocolCapabilities</c>。
 /// 由 <see cref="ConnectorProtocol.ParsePing"/> 统一归一。
 /// </summary>
