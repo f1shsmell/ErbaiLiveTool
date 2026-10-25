@@ -39,7 +39,9 @@ public sealed partial class AdminPage : Page
         UserBanList.ItemsSource = _userBan;
         UserBanCandidates.ItemsSource = _banCandidates;
         AdminList.ItemsSource = _admins;
-        _ = LoadAsync();
+        // 数据在 Loaded 拉取（NavigationCacheMode=Enabled：页面实例缓存，
+        // 每次进入仍触发 Loaded → 重拉数据，弹幕路径的拉黑/授权不会陈旧）
+        Loaded += (_, _) => _ = LoadAsync();
     }
 
     private async Task LoadAsync()
@@ -191,9 +193,20 @@ public sealed partial class AdminPage : Page
         {
             _songBan.Add(rule);
         }
+
+        SongBanEmptyText.Visibility = _songBan.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---- 用户黑名单 ----
+
+    private void OnSearchUsersForBanKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            OnSearchUsersForBan(sender, e);
+            e.Handled = true;
+        }
+    }
 
     private async void OnSearchUsersForBan(object sender, RoutedEventArgs e)
     {
@@ -209,6 +222,7 @@ public sealed partial class AdminPage : Page
             }
 
             UserBanStatus.Text = $"找到 {users.Count} 个用户";
+            UserBanCandidatesEmptyText.Visibility = _banCandidates.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception ex)
         {
@@ -265,9 +279,20 @@ public sealed partial class AdminPage : Page
         {
             _userBan.Add(banned);
         }
+
+        UserBanEmptyText.Visibility = _userBan.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---- 管理员 ----
+
+    private void OnSearchAdminsKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            OnSearchAdmins(sender, e);
+            e.Handled = true;
+        }
+    }
 
     private async void OnSearchAdmins(object sender, RoutedEventArgs e)
     {
@@ -307,5 +332,7 @@ public sealed partial class AdminPage : Page
         {
             _admins.Add(new UserDisplay(user));
         }
+
+        AdminEmptyText.Visibility = _admins.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

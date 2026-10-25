@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Platforms>x64</Platforms>
@@ -27,5 +27,6 @@
     <Compile Include="..\..\src\Erbai.App\Overlay\OverlayRenderers.cs" Link="Overlay\OverlayRenderers.cs" />
     <Compile Include="..\..\src\Erbai.App\Views\LogFileTail.cs" Link="Views\LogFileTail.cs" />
     <Compile Include="..\..\src\Erbai.App\CloseToTray.cs" Link="CloseToTray.cs" />
+    <Compile Include="..\..\src\Erbai.App\Ux\WindowPlacement.cs" Link="Ux\WindowPlacement.cs" />
   </ItemGroup>
 </Project>

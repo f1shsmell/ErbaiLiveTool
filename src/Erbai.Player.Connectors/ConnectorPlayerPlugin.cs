@@ -1,4 +1,4 @@
-using Erbai.Contracts.Configuration;
+﻿using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Players;
 using Erbai.Contracts.Plugins;
 
@@ -60,12 +60,10 @@ public sealed class ConnectorPlayerPlugin : IMusicPlayerPlugin
 
         if (ping.Capabilities.Search)
         {
-            caps |= PlayerCapabilities.Search;
         }
 
         if (ping.Capabilities.Pause && ping.Capabilities.Resume)
         {
-            caps |= PlayerCapabilities.PauseResume;
         }
 
         return caps;

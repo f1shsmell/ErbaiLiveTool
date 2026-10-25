@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -352,14 +352,9 @@ public sealed class ConnectorClient : IAsyncDisposable
         OnProcessExited();
     }
 
-    /// <summary>子进程退出后的即时清理（读循环线程调用）。</summary>
-    private void OnProcessExited()
+    /// <summary>失败并清空全部在途请求（进程退出/释放；两处调用点共用）。</summary>
+    private void FailAllPending()
     {
-        // 读循环退出 = 子进程 stdout 关闭（崩溃/被 Kill）：立即失败所有在途请求
-        // （审计 T4-1：否则空等 RequestTimeout 25s），下一次请求经 EnsureProcessAsync
-        // 双检 HasExited 直接重启。不 dispose/置空 _process——保留进程对象使调用方
-        // 的 kill→WaitForExit 模式仍可用（dispose 后访问 Process 成员会抛）；
-        // 释放统一由 DisposeProcessAsync（Deactivate/Dispose/超时杀进程）负责。
         lock (_pendingLock)
         {
             foreach (var (_, tcs) in _pending)
@@ -369,6 +364,17 @@ public sealed class ConnectorClient : IAsyncDisposable
 
             _pending.Clear();
         }
+    }
+
+    /// <summary>子进程退出后的即时清理（读循环线程调用）。</summary>
+    private void OnProcessExited()
+    {
+        // 读循环退出 = 子进程 stdout 关闭（崩溃/被 Kill）：立即失败所有在途请求
+        // （审计 T4-1：否则空等 RequestTimeout 25s），下一次请求经 EnsureProcessAsync
+        // 双检 HasExited 直接重启。不 dispose/置空 _process——保留进程对象使调用方
+        // 的 kill→WaitForExit 模式仍可用（dispose 后访问 Process 成员会抛）；
+        // 释放统一由 DisposeProcessAsync（Deactivate/Dispose/超时杀进程）负责。
+    FailAllPending();
     }
 
     private async Task<ConnectorResponse> RequestAsync(
@@ -536,15 +542,7 @@ public sealed class ConnectorClient : IAsyncDisposable
         _stdin = null;
         _stdout = null;
         // 未完成的请求全部失败（进程已死，不能挂死调用方）
-        lock (_pendingLock)
-        {
-            foreach (var (_, tcs) in _pending)
-            {
-                tcs.TrySetException(new InvalidOperationException("connector process terminated"));
-            }
-
-            _pending.Clear();
-        }
+    FailAllPending();
     }
 
     /// <summary>协议超时/僵死：直接 terminate 进程并释放（不等待 shutdown）。</summary>

@@ -1,4 +1,4 @@
-using Erbai.Contracts.Abstractions;
+﻿using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Storage;
 
 namespace Erbai.Modules.SongRequest.Services;
@@ -55,30 +55,4 @@ public sealed class UserService(IStorageEngine store)
             incrementRequestCount, ct);
     }
 
-    /// <summary>抖音用户精细合并保存（弹幕/粉丝团事件路径）。</summary>
-    public async Task SaveDouyinUserAsync(
-        string roomId,
-        string userId,
-        string nickname,
-        int? fanLevel,
-        bool isAdmin,
-        bool isAnchor,
-        bool hasExplicitAdminFlag = false,
-        bool hasExplicitAnchorFlag = false,
-        CancellationToken ct = default)
-    {
-        var stored = await store.GetUserAsync("douyin", roomId, userId, ct);
-        var (effectiveAdmin, effectiveAnchor) = MergeDouyinUserFlags(
-            stored, isAdmin, isAnchor, hasExplicitAdminFlag, hasExplicitAnchorFlag);
-        await store.SaveUserAsync(new User
-        {
-            Platform = "douyin",
-            RoomId = roomId,
-            UserId = userId,
-            Nickname = nickname,
-            IsAdmin = effectiveAdmin,
-            IsAnchor = effectiveAnchor,
-            FanLevel = fanLevel,
-        }, ct: ct);
-    }
 }

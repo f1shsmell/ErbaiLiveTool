@@ -14,10 +14,8 @@
         </Grid.RowDefinitions>
 
         <!-- 标题 -->
-        <StackPanel Spacing="2">
-            <TextBlock Text="点歌队列" Style="{StaticResource PageTitleTextStyle}" />
-            <TextBlock Text="观众经弹幕「点歌 歌名 - 歌手」提交；选中行后可用底部操作" Style="{StaticResource CaptionTextStyle}" />
-        </StackPanel>
+        <ux:PageHeader Icon="List" Title="点歌队列"
+                       Subtitle="观众经弹幕「点歌 歌名 - 歌手」提交；选中行后可用底部操作" />
 
         <!-- 手动点歌 + 队列操作（评审第一轮 #3/#5/#6） -->
         <StackPanel Grid.Row="1" Spacing="8">
@@ -43,7 +41,7 @@
                     <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="60" />
                     <ColumnDefinition Width="80" />
-                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="顺序" Style="{StaticResource CaptionTextStyle}" />
                 <TextBlock Grid.Column="1" Text="歌曲" Style="{StaticResource CaptionTextStyle}" />
@@ -56,11 +54,12 @@
 
         <!-- 列表 + 空状态 -->
         <Grid Grid.Row="3">
-            <ListView x:Name="QueueList" SelectionMode="Single" SelectionChanged="OnSelectionChanged">
+            <ListView x:Name="QueueList" SelectionMode="Single" SelectionChanged="OnSelectionChanged" Padding="12,0,12,0">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        <Setter Property="Padding" Value="0,4" />
+                        <Setter Property="MinHeight" Value="44" />
+                        <Setter Property="CornerRadius" Value="6" />
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
@@ -74,28 +73,29 @@
                                 <ColumnDefinition Width="80" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{x:Bind Position}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="0" Text="{x:Bind Position, Mode=OneWay}" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind SongName}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Singer}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis"
-                                           Visibility="{x:Bind HasSinger}" />
+                                <TextBlock Text="{x:Bind SongName, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Singer, Mode=OneWay}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis"
+                                           Visibility="{x:Bind HasSinger, Mode=OneWay}" />
                             </StackPanel>
-                            <TextBlock Grid.Column="2" Text="{x:Bind Requester}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Grid.Column="3" Text="{x:Bind SourceText}" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                            <TextBlock Grid.Column="2" Text="{x:Bind Requester, Mode=OneWay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="3" Text="{x:Bind SourceText, Mode=OneWay}" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="★" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" Visibility="{x:Bind IsCurrent}" VerticalAlignment="Center" />
-                                <TextBlock Text="{x:Bind StatusText}" FontSize="12" VerticalAlignment="Center" />
+                                <TextBlock Text="★" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" Visibility="{x:Bind IsCurrent, Mode=OneWay}" VerticalAlignment="Center" />
+                                <Ellipse Width="7" Height="7" Fill="{x:Bind StatusBrush, Mode=OneWay}" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Bind StatusText, Mode=OneWay}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
                             <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                 <Button Content="标记完成" Style="{StaticResource InlineActionButtonStyle}"
-                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnCompleteInline"
-                                        Visibility="{x:Bind IsCurrent}" />
+                                        Tag="{x:Bind Item.Request.RequestId, Mode=OneWay}" Click="OnCompleteInline"
+                                        Visibility="{x:Bind IsCurrent, Mode=OneWay}" />
                                 <Button Content="跳过" Style="{StaticResource InlineActionButtonStyle}"
-                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnSkipInline"
-                                        Visibility="{x:Bind IsCurrent}" />
+                                        Tag="{x:Bind Item.Request.RequestId, Mode=OneWay}" Click="OnSkipInline"
+                                        Visibility="{x:Bind IsCurrent, Mode=OneWay}" />
                                 <Button Content="移出队列" Style="{StaticResource InlineActionButtonStyle}"
-                                        Tag="{x:Bind Item.Request.RequestId}" Click="OnRemoveInline"
-                                        Visibility="{x:Bind NeedsRemoval}" />
+                                        Tag="{x:Bind Item.Request.RequestId, Mode=OneWay}" Click="OnRemoveInline"
+                                        Visibility="{x:Bind NeedsRemoval, Mode=OneWay}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>

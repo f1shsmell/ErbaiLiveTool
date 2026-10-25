@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Erbai.Contracts.Configuration;
 
 namespace Erbai.Core.Configuration;
@@ -18,11 +18,6 @@ public static class ConfigValidator
     public static readonly IReadOnlySet<string> SupportedPlayers = new HashSet<string>
     {
         "lxmusic", "netease", "kugou", "qqmusic", "folia",
-    };
-
-    public static readonly IReadOnlySet<string> LoopbackHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "127.0.0.1", "::1", "localhost",
     };
 
     public static AppConfig Validate(AppConfig settings)
@@ -94,21 +89,36 @@ public static class ConfigValidator
             throw new ConfigException("permissions.level_unknown_policy must be 'deny' or 'allow'");
         }
 
-        // ---- ui（host 强制回环，归一化 127.0.0.1；端口 1-65535）----
+        // ---- permissions.rate_limit（点歌频率限制）----
+        CheckIntRange(settings.Permissions.RateLimitWindowSeconds, 10, 86400, "permissions.rate_limit_window_seconds");
+        CheckIntRange(settings.Permissions.RateLimitMaxRequests, 1, 100, "permissions.rate_limit_max_requests");
+
+        // ---- ui（端口 1-65535；本地 HTTP 由服务器硬绑定 127.0.0.1 回环）----
         CheckIntRange(settings.Ui.Port, 1, 65535, "ui.port");
-        var host = settings.Ui.Host.Trim().ToLowerInvariant();
-        if (!LoopbackHosts.Contains(host))
+
+        // ---- ui.window_*（可空；有值时限定范围）----
+        if (settings.Ui.WindowWidth is { } winW)
         {
-            throw new ConfigException(
-                "ui.host 必须是本机回环地址（127.0.0.1 / ::1 / localhost），本地 HTTP 只允许本机访问");
+            CheckIntRange(winW, 400, 3840, "ui.window_width");
         }
 
-        // ---- overlay ----
-        var theme = settings.Overlay.Theme.Trim().ToLowerInvariant();
-        if (theme is not ("clash" or "light"))
+        if (settings.Ui.WindowHeight is { } winH)
         {
-            throw new ConfigException("overlay.theme must be 'clash' or 'light'");
+            CheckIntRange(winH, 300, 2160, "ui.window_height");
         }
+
+        if (settings.Ui.WindowX is { } winX)
+        {
+            CheckIntRange(winX, -8192, 8192, "ui.window_x");
+        }
+
+        if (settings.Ui.WindowY is { } winY)
+        {
+            CheckIntRange(winY, -8192, 8192, "ui.window_y");
+        }
+
+        // ---- storage.retention_days ----
+        CheckIntRange(settings.Storage.RetentionDays, 0, 3650, "storage.retention_days");
 
         // ---- idle_playlist ----
         CheckPositive(settings.IdlePlaylist.PlayInterval, "idle_playlist.play_interval");
@@ -143,8 +153,7 @@ public static class ConfigValidator
             Player = player with { Key = playerKey },
             Providers = providers with { Enabled = normalized },
             Permissions = settings.Permissions with { LevelUnknownPolicy = levelPolicy },
-            Ui = settings.Ui with { Host = host is "::1" or "localhost" ? "127.0.0.1" : host },
-            Overlay = settings.Overlay with { Theme = theme },
+            Ui = settings.Ui,
             DouyinGrabber = settings.DouyinGrabber with { AppSettings = appSettings },
             QueueUp = settings.QueueUp with { Rules = queueUpRules },
         };

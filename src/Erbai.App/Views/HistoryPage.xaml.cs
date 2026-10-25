@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Erbai.App.Ux;
 using Erbai.Contracts.Requests;
 using Erbai.Contracts.QueueUp;
@@ -34,7 +34,7 @@ public sealed partial class HistoryPage : Page
         InitializeComponent();
         SongList.ItemsSource = _songItems;
         QueueUpList.ItemsSource = _queueUpItems;
-        _ = LoadCurrentSectionAsync();
+        _ = LoadGuardedAsync(LoadCurrentSectionAsync);
     }
 
     // ---- 状态文案 ----
@@ -51,7 +51,6 @@ public sealed partial class HistoryPage : Page
         RequestStatus.Cancelled => "已取消",
         RequestStatus.Failed => "播放失败",
         RequestStatus.Rejected => "已拒绝",
-        RequestStatus.RecoveryRequired => "待恢复",
         _ => status.ToString(),
     };
 
@@ -68,8 +67,7 @@ public sealed partial class HistoryPage : Page
     private static Brush SongStatusBrush(RequestStatus status) => status switch
     {
         RequestStatus.Completed => SolidColorBrushHelper.Success,
-        RequestStatus.Failed or RequestStatus.Rejected or RequestStatus.RecoveryRequired
-            => SolidColorBrushHelper.Critical,
+        RequestStatus.Failed or RequestStatus.Rejected => SolidColorBrushHelper.Critical,
         _ => SolidColorBrushHelper.Neutral,
     };
 
@@ -238,7 +236,7 @@ public sealed partial class HistoryPage : Page
         QueueUpSection.Visibility = _songSection ? Visibility.Collapsed : Visibility.Visible;
         SongStatusBox.Visibility = _songSection ? Visibility.Visible : Visibility.Collapsed;
         _page = 0;
-        _ = LoadCurrentSectionAsync();
+        _ = LoadGuardedAsync(LoadCurrentSectionAsync);
     }
 
     private void OnSongStatusChanged(object sender, SelectionChangedEventArgs e)
@@ -264,25 +262,63 @@ public sealed partial class HistoryPage : Page
         }
     }
 
-    private void OnRefreshClick(object sender, RoutedEventArgs e) => _ = LoadCurrentSectionAsync();
+    private void OnRefreshClick(object sender, RoutedEventArgs e) => _ = LoadGuardedAsync(LoadCurrentSectionAsync);
 
     private void OnPrevPage(object sender, RoutedEventArgs e)
     {
         if (_page > 0)
         {
             _page--;
-            _ = LoadCurrentSectionAsync();
+            _ = LoadGuardedAsync(LoadCurrentSectionAsync);
         }
     }
 
     private void OnNextPage(object sender, RoutedEventArgs e)
     {
         _page++;
-        _ = LoadCurrentSectionAsync();
+        _ = LoadGuardedAsync(LoadCurrentSectionAsync);
     }
 
     private Task LoadCurrentSectionAsync() =>
         _songSection ? LoadSongHistoryAsync() : LoadQueueUpHistoryAsync();
+
+    // ── 加载态（2026-10 UI 轮）：分页 SQL 期间显示 ProgressRing 并禁用刷新/翻页——
+    // 旧行为按钮全程可用，双击刷新会并发两次查询互相覆盖结果。
+
+    private bool _loading;
+
+    private void SetLoading(bool loading)
+    {
+        HistoryRing.IsActive = loading;
+        HistoryRing.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
+        RefreshButton.IsEnabled = !loading;
+        if (loading)
+        {
+            // 加载中先禁用翻页；完成后 UpdatePaging 按真实页码恢复
+            PrevPageButton.IsEnabled = false;
+            NextPageButton.IsEnabled = false;
+        }
+    }
+
+    private async Task LoadGuardedAsync(Func<Task> load)
+    {
+        if (_loading)
+        {
+            return; // 并发触发合并：进行中的查询完成后 UI 已是最新
+        }
+
+        _loading = true;
+        SetLoading(true);
+        try
+        {
+            await load();
+        }
+        finally
+        {
+            _loading = false;
+            SetLoading(false);
+        }
+    }
 
     private async Task LoadSongHistoryAsync()
     {

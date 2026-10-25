@@ -19,23 +19,29 @@ internal abstract class OverlayFeed : IDisposable
     };
 }
 
-/// <summary>点歌/排队轮询数据源。</summary>
+/// <summary>
+/// 点歌/排队轮询数据源（2026-10 长稳轮改为顺序化异步循环）。
+/// 旧实现 System.Threading.Timer(2s) + GetAwaiter().GetResult()：服务端变慢时
+/// （HttpClient 超时 4s &gt; 轮询周期 2s）回调重叠堆积，线程池被阻塞的 GetResult
+/// 线程占满。顺序化循环天然不重叠：上一轮（含失败/超时）完成才排下一轮。
+/// </summary>
 internal sealed class PollingOverlayFeed : OverlayFeed
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(4) };
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
 
     private readonly string _queueUrl;
     private readonly string _queueUpUrl;
     private readonly bool _pollQueue;
     private readonly bool _pollQueueUp;
-    private readonly System.Threading.Timer _timer;
-    private readonly object _gate = new();
-    private bool _disposed;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Task _loop;
+    private volatile bool _disposed;
 
-    /// <summary>点歌快照更新（任意线程）。</summary>
+    /// <summary>点歌快照更新（线程池线程）。</summary>
     public event Action<QueueSnapshot>? QueueUpdated;
 
-    /// <summary>排队快照更新（任意线程）。</summary>
+    /// <summary>排队快照更新（线程池线程）。</summary>
     public event Action<QueueUpSnapshot>? QueueUpUpdated;
 
     public PollingOverlayFeed(string baseUrl, bool pollQueue, bool pollQueueUp)
@@ -44,64 +50,58 @@ internal sealed class PollingOverlayFeed : OverlayFeed
         _pollQueueUp = pollQueueUp;
         _queueUrl = $"{baseUrl}/api/v1/queue";
         _queueUpUrl = $"{baseUrl}/api/v1/queueup";
-        _timer = new System.Threading.Timer(_ => Poll(), null, 0, 2000);
+        _loop = Task.Run(() => PollLoopAsync(_cts.Token));
     }
 
-    private void Poll()
+    private async Task PollLoopAsync(CancellationToken ct)
     {
-        if (_disposed)
+        while (!ct.IsCancellationRequested && !_disposed)
         {
-            return;
-        }
+            if (_pollQueue)
+            {
+                await PollAsync(_queueUrl, json =>
+                {
+                    var snapshot = JsonSerializer.Deserialize<QueueSnapshot>(json, JsonOptions);
+                    if (snapshot is not null)
+                    {
+                        QueueUpdated?.Invoke(snapshot);
+                    }
+                });
+            }
 
-        if (_pollQueue)
-        {
-            PollQueue();
-        }
+            if (_pollQueueUp && !ct.IsCancellationRequested && !_disposed)
+            {
+                await PollAsync(_queueUpUrl, json =>
+                {
+                    var snapshot = JsonSerializer.Deserialize<QueueUpSnapshot>(json, JsonOptions);
+                    if (snapshot is not null)
+                    {
+                        QueueUpUpdated?.Invoke(snapshot);
+                    }
+                });
+            }
 
-        if (_pollQueueUp && !_disposed)
-        {
-            PollQueueUp();
+            try
+            {
+                await Task.Delay(Interval, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
-    private void PollQueue()
+    private static async Task PollAsync(string url, Action<string> handle)
     {
         try
         {
-            var json = Http.GetStringAsync(_queueUrl).GetAwaiter().GetResult();
-            var snapshot = JsonSerializer.Deserialize<QueueSnapshot>(json, JsonOptions);
-            if (snapshot is not null)
-            {
-                lock (_gate)
-                {
-                    QueueUpdated?.Invoke(snapshot);
-                }
-            }
+            var json = await Http.GetStringAsync(url);
+            handle(json);
         }
         catch
         {
             // 服务未就绪/瞬时失败：下一轮重试（不记日志避免刷屏）
-        }
-    }
-
-    private void PollQueueUp()
-    {
-        try
-        {
-            var json = Http.GetStringAsync(_queueUpUrl).GetAwaiter().GetResult();
-            var snapshot = JsonSerializer.Deserialize<QueueUpSnapshot>(json, JsonOptions);
-            if (snapshot is not null)
-            {
-                lock (_gate)
-                {
-                    QueueUpUpdated?.Invoke(snapshot);
-                }
-            }
-        }
-        catch
-        {
-            // 同上
         }
     }
 
@@ -113,7 +113,9 @@ internal sealed class PollingOverlayFeed : OverlayFeed
         }
 
         _disposed = true;
-        _timer.Dispose();
+        _cts.Cancel();
+        // 不 await _loop：HTTP 可能正处于 4s 超时等待，取消令牌会让它在下一个
+        // await 点退出；Dispose 调用方（窗口线程）不得被网络等待阻塞
     }
 }
 

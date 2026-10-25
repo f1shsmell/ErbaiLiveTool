@@ -60,6 +60,20 @@ public interface IStorageEngine : IAsyncDisposable
     /// <summary>规范化歌键是否已存在于活动状态（queued/searching/ready/dispatched）。</summary>
     Task<bool> CanonicalExistsAsync(string canonicalKey, CancellationToken ct = default);
 
+    /// <summary>
+    /// 窗口内提交计数（点歌频率限制）：该 (platform, room_id, user_id) 自 since 起
+    /// 状态非 rejected 的请求行数。platform/userId 为空时恒返回 0。
+    /// </summary>
+    Task<int> CountRecentRequestsAsync(
+        string platform, string roomId, string userId, DateTimeOffset since, CancellationToken ct = default);
+
+    /// <summary>
+    /// 历史数据保留清理（2026-10 长稳轮）：删除 created_at 早于 cutoff 的
+    /// queue_events 审计行与终态 song_requests（活动请求永不清理；仍被事件引用的
+    /// 请求跳过以保外键）。返回 (删除事件数, 删除请求数)。
+    /// </summary>
+    Task<(int EventsDeleted, int RequestsDeleted)> PruneHistoryAsync(DateTimeOffset cutoff, CancellationToken ct = default);
+
     // ---- users 域（docs/03 §2–§3：UPSERT 语义/特权合并不降级）----
 
     /// <summary>

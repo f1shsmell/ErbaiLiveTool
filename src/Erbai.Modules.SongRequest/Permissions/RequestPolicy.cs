@@ -33,6 +33,13 @@ public sealed class RequestPolicy
 
     public int BilibiliMinMedalLevel { get; private set; }
 
+    /// <summary>点歌频率限制（防刷屏）：窗口内最大有效提交次数；≤0 关闭。</summary>
+    public bool RateLimitEnabled { get; private set; }
+
+    public int RateLimitWindowSeconds { get; private set; }
+
+    public int RateLimitMaxRequests { get; private set; }
+
     public RequestPolicy(AppConfig config) => Reload(config);
 
     /// <summary>运行时热更新策略（设置页保存后调用；旧版构造快照导致改配置不生效）。</summary>
@@ -52,6 +59,9 @@ public sealed class RequestPolicy
         AdminBypass = permissions.AdminBypass;
         DouyinMinFanLevel = Math.Max(permissions.DouyinMinFanLevel, 0);
         BilibiliMinMedalLevel = Math.Max(permissions.BilibiliMinMedalLevel, 0);
+        RateLimitEnabled = permissions.RateLimitEnabled;
+        RateLimitWindowSeconds = Math.Max(permissions.RateLimitWindowSeconds, 1);
+        RateLimitMaxRequests = Math.Max(permissions.RateLimitMaxRequests, 1);
     }
 
     /// <summary>用户门槛检查：admin/anchor 直通；平台等级门槛；等级未知策略。</summary>
@@ -102,6 +112,22 @@ public sealed class RequestPolicy
         }
 
         return PermissionDecision.Allow();
+    }
+
+    /// <summary>
+    /// 频率限制判定（防刷屏，2026-10）：窗口内有效提交（非 rejected 落库行）达到
+    /// 上限即拒。admin/anchor 与其他限制一致地由调用方先走 AdminBypass。
+    /// recentCount 由调用方经 <c>IStorageEngine.CountRecentRequestsAsync</c> 查询。
+    /// </summary>
+    public PermissionDecision CheckRateLimit(int recentCount)
+    {
+        if (!RateLimitEnabled || recentCount < RateLimitMaxRequests)
+        {
+            return PermissionDecision.Allow();
+        }
+
+        return PermissionDecision.Deny("rate_limited",
+            $"点歌太频繁啦，{RateLimitWindowSeconds / 60.0:0.#} 分钟内最多点 {RateLimitMaxRequests} 首");
     }
 
     private PermissionDecision CheckLevel(int? level, int minimum, string reasonCode, string messageTemplate)

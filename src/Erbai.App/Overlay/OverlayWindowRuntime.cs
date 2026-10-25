@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 using Erbai.Contracts.Queue;
 using Erbai.Contracts.QueueUp;
@@ -85,12 +85,19 @@ public sealed class OverlayWindowRuntime : IOverlayWindowHandle
 
         try
         {
-            _form = created.Task.Result; // 阻塞最多 5s（窗线程构造，正常毫秒级）
+            // WaitAsync 兜底超时（2026-10 长稳轮）：注释曾称"阻塞最多 5s"，但
+            // Task.Result 无超时——窗线程在 TrySetResult 之前挂住会永久阻塞调用方。
+            _form = created.Task.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         }
         catch (AggregateException ex) when (ex.InnerException is not null)
         {
             _feed.Dispose();
             throw new InvalidOperationException($"悬浮窗构造失败：{ex.InnerException.Message}", ex.InnerException);
+        }
+        catch (TimeoutException)
+        {
+            _feed.Dispose();
+            throw new InvalidOperationException("悬浮窗构造超时（窗线程 5s 内未就绪）");
         }
 
         // 构造期就订阅，避免 OnLoad 早期失败时事件已触发但无人接收（静默消失）

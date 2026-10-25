@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Erbai.Contracts.Configuration;
 using Erbai.Core.Configuration;
 
@@ -38,7 +38,6 @@ public class ConfigStoreTests
             var config = await store.LoadAsync();
 
             Assert.True(File.Exists(path));
-            Assert.Equal("127.0.0.1", config.Ui.Host);
             Assert.Equal(19830, config.Ui.Port);
             Assert.Equal(20, config.Queue.MaxSize);
             Assert.Equal("lxmusic", config.Player.Key);
@@ -66,7 +65,6 @@ public class ConfigStoreTests
             var path = WriteConfig(dir, """{ "ui": { "host": "localhost", "port": 20000 }, "queue": { "max_size": 50, "display_order": "DESC" } }""");
             var config = await LoadFrom(path);
 
-            Assert.Equal("127.0.0.1", config.Ui.Host); // localhost 归一化
             Assert.Equal(20000, config.Ui.Port);
             Assert.Equal(50, config.Queue.MaxSize);
             Assert.Equal("desc", config.Queue.DisplayOrder); // 枚举归一化
@@ -92,20 +90,6 @@ public class ConfigStoreTests
         }
     }
 
-    [Fact]
-    public async Task Load_InvalidHost_Throws()
-    {
-        var dir = TempDir();
-        try
-        {
-            var path = WriteConfig(dir, """{ "ui": { "host": "192.168.1.10" } }""");
-            await Assert.ThrowsAsync<ConfigException>(() => LoadFrom(path));
-        }
-        finally
-        {
-            if (Directory.Exists(dir)) { Directory.Delete(dir, recursive: true); }
-        }
-    }
 
     [Fact]
     public async Task Load_CorruptJson_ThrowsWithActionableMessage()
@@ -286,8 +270,7 @@ public class ConfigStoreTests
     [Fact]
     public void DefaultConfig_PassesValidation()
     {
-        var validated = ConfigValidator.Validate(AppConfig.CreateDefault());
-        Assert.Equal("127.0.0.1", validated.Ui.Host);
+        _ = ConfigValidator.Validate(AppConfig.CreateDefault());
     }
 
     [Fact]

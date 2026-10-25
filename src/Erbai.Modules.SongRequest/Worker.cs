@@ -41,43 +41,79 @@ internal static class Worker
     public static async Task RunAsync(SongQueueService queue, CancellationToken ct)
     {
         var idle = new IdleState();
-        while (!ct.IsCancellationRequested)
+        // 持久 pending 读取任务：跨迭代复用（见下方循环内注释），绝不孤儿化
+        Task<SongRequest>? pendingRead = null;
+        try
         {
-            if (queue.IdleConfig.Enabled)
+            while (!ct.IsCancellationRequested)
             {
+                if (queue.IdleConfig.Enabled)
+                {
+                    try
+                    {
+                        var idleHandled = await MaybePlayIdleAsync(queue, idle, ct);
+                        if (idleHandled)
+                        {
+                            continue;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        queue.LogWarning($"空闲歌单循环异常（继续运行）：{ex.Message}");
+                    }
+                }
+
+                SongRequest? request;
                 try
                 {
-                    var idleHandled = await MaybePlayIdleAsync(queue, idle, ct);
-                    if (idleHandled)
+                    // 同时等新点歌与空闲唤醒：主播把空闲歌单从关切到开（ReloadIdleConfig）
+                    // 或热更新列表（ReloadIdleSongsAsync）都会发唤醒信号——旧实现只阻塞在
+                    // pending 通道上，信号无人消费，空闲歌单要等下一首点歌才会真正开播。
+                    //
+                    // pendingRead 必须跨迭代复用：若唤醒赢时直接 continue 抛弃已注册的
+                    // ReadAsync，该任务会残留为并发读取者并抢先消费后续写入的请求，
+                    // 活跃读取器从此饿死（点歌永远停在 queued，E2E 实测复现）。
+                    // 因此唤醒先到且点歌未到时保留同一读取任务，下轮继续竞争。
+                    pendingRead ??= queue.Pending.Reader.ReadAsync(ct).AsTask();
+                    var done = await Task.WhenAny(pendingRead, queue.WaitIdleWakeupAsync(ct));
+                    if (done != pendingRead && !pendingRead.IsCompleted)
                     {
-                        continue;
+                        continue; // 唤醒信号先到：重走循环（此时 IdleConfig.Enabled 已是新值）
                     }
+
+                    request = await pendingRead;
+                    pendingRead = null;
                 }
                 catch (OperationCanceledException)
                 {
-                    break;
+                    return;
                 }
-                catch (Exception ex)
+                catch (ChannelClosedException)
                 {
-                    queue.LogWarning($"空闲歌单循环异常（继续运行）：{ex.Message}");
+                    return;
+                }
+
+                await DispatchOneAsync(queue, request, ct);
+            }
+        }
+        finally
+        {
+            // 退出前观察残余读取任务的取消异常，避免无人观察的 Task
+            if (pendingRead is not null)
+            {
+                try
+                {
+                    await pendingRead;
+                }
+                catch
+                {
+                    // 取消/关闭通道的正常退出路径
                 }
             }
-
-            SongRequest request;
-            try
-            {
-                request = await queue.Pending.Reader.ReadAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ChannelClosedException)
-            {
-                break;
-            }
-
-            await DispatchOneAsync(queue, request, ct);
         }
     }
 

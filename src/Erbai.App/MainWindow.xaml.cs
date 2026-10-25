@@ -1,4 +1,5 @@
-using Erbai.App.Views;
+﻿using Erbai.App.Views;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
 using WinUIEx;
@@ -11,6 +12,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
     {
         InitializeComponent();
         Title = "二白直播助手";
+
 
         // 窗口/任务栏图标（logo 2026-09-08）：exe 已经 ApplicationIcon 内嵌图标，
         // 但 WinUI 3 未打包应用的窗口标题栏图标不随 exe 图标，须显式 SetIcon
@@ -45,13 +47,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
             }
         }
 
-        try
-        {
-            this.SetWindowSize(1120, 720);
-        }
-        catch
-        {
-        }
+        RestoreWindowPlacement();
         // 窗口关闭语义（托盘常驻 2026-09）：点 X 默认隐藏到系统托盘后台运行
         // （主播挂机监听场景，关窗不退出；托盘菜单「退出」走完整清理链）；
         // 系统关机/设置关闭托盘时仍走完整退出路径（释放组合根——停平台监督者
@@ -68,6 +64,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         AppWindow.Closing += OnClosing;
         Nav.SelectionChanged += (_, _) => Navigate();
         Nav.SelectedItem = Nav.MenuItems[0];
+        InitBrandTitleBar();
         // 观感打磨第二轮：Footer 显示程序集信息版本（安装包同名，单一事实源）
         VersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}";
         // 系统关机/注销检测（AppWindow.Closing 无 Reason，WASDK 1.8 只有 Cancel）：
@@ -78,6 +75,115 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
 
     // SystemEvents.SessionEnding 在 SystemEvents 自己的消息线程触发，UI 线程读取：volatile 保证可见性
     private volatile bool _sessionEnding;
+
+    // ── 窗口位置/尺寸记忆（2026-10 长稳轮）：退出采集 → 启动复位（屏幕边界钳制） ──
+
+    private void RestoreWindowPlacement()
+    {
+        try
+        {
+            var ui = App.Services.Config.Settings.Ui;
+            var width = Math.Clamp(ui.WindowWidth ?? 1120, 400, 3840);
+            var height = Math.Clamp(ui.WindowHeight ?? 720, 300, 2160);
+            this.SetWindowSize(width, height);
+
+            if (ui.WindowX is { } x && ui.WindowY is { } y)
+            {
+                // 屏幕边界钳制：拔掉外接显示器后记忆位置可能落在不存在的区域
+                var screens = Microsoft.UI.Windowing.DisplayArea.FindAll()
+                    .Select(a => new Ux.WindowPlacement.ScreenRect(
+                        a.WorkArea.X, a.WorkArea.Y, a.WorkArea.Width, a.WorkArea.Height))
+                    .ToList();
+                var (clampedX, clampedY) = Ux.WindowPlacement.Clamp(x, y, width, height, screens);
+                this.Move(clampedX, clampedY);
+            }
+        }
+        catch
+        {
+            // 显示器 API/移动失败（远程会话等）：退回默认尺寸（已设），不影响启动
+            try
+            {
+                this.SetWindowSize(1120, 720);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    /// <summary>退出前把当前窗口位置/尺寸写进配置（CleanupAndCloseAsync 调用）。</summary>
+    private async Task PersistWindowPlacementAsync()
+    {
+        try
+        {
+            var position = AppWindow.Position;
+            var size = AppWindow.Size;
+            var services = App.Services;
+            var candidate = services.Config.Settings with
+            {
+                Ui = services.Config.Settings.Ui with
+                {
+                    WindowX = position.X,
+                    WindowY = position.Y,
+                    WindowWidth = size.Width,
+                    WindowHeight = size.Height,
+                },
+            };
+            await services.Config.PersistAsync(candidate);
+        }
+        catch
+        {
+            // 窗口记忆失败不阻断退出链
+        }
+    }
+
+    /// <summary>
+    /// 品牌标题栏（2026-10 UI 美化轮）：内容延伸进标题栏 + 顶部品牌条拖拽区。
+    /// NavigationView 在内容延伸时自动加顶部衬垫（TemplateSettings.TopPadding），
+    /// 系统标题按钮保留原位；按钮前景色按当前主题取值（延伸后系统不再自动反色）。
+    /// Win10 上同样生效（ExtendsContentIntoTitleBar 不依赖 Mica）。
+    /// </summary>
+    private void InitBrandTitleBar()
+    {
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
+        try
+        {
+            AppTitleIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri("ms-appx:///Assets/AppLogo.png"));
+        }
+        catch
+        {
+            // logo 缺失：品牌条仅显示应用名，不影响使用
+        }
+
+        ApplyCaptionButtonColors();
+        if (Content is FrameworkElement root)
+        {
+            root.ActualThemeChanged += (_, _) => ApplyCaptionButtonColors();
+        }
+    }
+
+    private void ApplyCaptionButtonColors()
+    {
+        try
+        {
+            var dark = (Content as FrameworkElement)?.ActualTheme == ElementTheme.Dark;
+            var fg = dark
+                ? Windows.UI.Color.FromArgb(0xFF, 0xE3, 0xE7, 0xEA)
+                : Windows.UI.Color.FromArgb(0xFF, 0x3B, 0x3E, 0x42);
+            var titleBar = AppWindow.TitleBar;
+            titleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+            titleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            titleBar.ButtonForegroundColor = fg;
+            titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0xFF, 0x8A, 0x8F, 0x94);
+        }
+        catch
+        {
+            // 平台不支持自定义标题按钮色：保持系统默认
+        }
+    }
 
     private void OnSessionEnding(object? sender, SessionEndingEventArgs e) => _sessionEnding = true;
 
@@ -145,6 +251,8 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
     /// 放行标志 → Close()。点 X 退出与托盘「退出」共用，保证清理链一致。</summary>
     private async Task CleanupAndCloseAsync()
     {
+        // 窗口位置/尺寸先于组合根释放落盘（ConfigStore 属组合根；Dispose 后不可再写）
+        await PersistWindowPlacementAsync();
         try
         {
             await App.Services!.DisposeAsync();
