@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Erbai.App.Views.OverviewPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -71,7 +71,6 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBox x:Name="DanmakuInput" HorizontalAlignment="Stretch" PlaceholderText="歌名 - 歌手，回车提交（无需输入点歌）" KeyDown="OnDanmakuInputKeyDown" />
                         <Button Content="发送" Click="OnSendDanmaku" />
-                        <Button Content="注入测试弹幕" Click="OnInjectTest" />
                     </StackPanel>
                     <TextBlock x:Name="LogText" Text="" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                 </StackPanel>

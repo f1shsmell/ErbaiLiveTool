@@ -2,6 +2,9 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <!-- 与 App.Tests 一致锁定 x64：sln x64 构建时输出 bind\（避开 360 对旧
+         AnyCPU 目录 plugins 副本的持续锁定导致"没有可用测试"） -->
+    <Platforms>x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="Xunit" />

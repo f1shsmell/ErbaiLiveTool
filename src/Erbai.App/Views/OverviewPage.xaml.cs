@@ -27,7 +27,6 @@ public sealed partial class OverviewPage : Page
     private const int StatusPollMs = 3000;
 
     private readonly ObservableCollection<DanmakuLogLine> _previewLines = [];
-    private Subscription<LiveEvent>? _livePreviewSub;
 
     /// <summary>待刷新的直播事件缓冲（线程池入队，UI 线程节拍转换着色）。</summary>
     private List<LiveEvent> _pendingPreview = [];
@@ -303,13 +302,6 @@ public sealed partial class OverviewPage : Page
             ? $"已处理：{text}"
             : $"（未识别为点歌/命令）：{text}";
         DanmakuInput.Text = "";
-    }
-
-    private async void OnInjectTest(object sender, RoutedEventArgs e)
-    {
-        // 端到端冒烟：注入"点歌"（自动走提交流水线→搜索→派发→播放等待）
-        var consumed = await App.Services.InjectDanmakuAsync("点歌 晴天 - 周杰伦");
-        LogText.Text = consumed ? "测试弹幕已注入（点歌 晴天 - 周杰伦）" : "注入失败";
     }
 
     // ── 连接状态脉冲反馈已迁入 Ux.StatusBadge（观感打磨第二轮）：徽章内部

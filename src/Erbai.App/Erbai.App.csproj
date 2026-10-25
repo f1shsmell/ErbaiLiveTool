@@ -92,10 +92,22 @@
        Plugins/ 子目录加载（config.ini + 主 DLL）；此处仅保证构建顺序
        （ReferenceOutputAssembly=false），DLL 与 config.ini 由拷贝钩子放入 Plugins/ 布局
        （依赖经插件 ALC 宿主优先共享解析，无需随拷贝）。 -->
+  <!-- 模块 bin 路径（平台自适应）：CI 的 -p:Platform=x64 会全局传播到引用项目
+       （输出在 bin\x64\...），本地不带平台时在 bin\...——两处择一存在者。
+       （2026-10 CI 实测 MSB3030：硬编码 bin\Release 路径在 x64 构建下找不到。） -->
+  <PropertyGroup Condition="'$(Platform)' == 'x64'">
+    <_QueueUpBin>..\Erbai.Modules.QueueUp\bin\x64\$(Configuration)\net8.0</_QueueUpBin>
+    <_GiftFxBin>..\Erbai.Modules.GiftFx\bin\x64\$(Configuration)\net8.0</_GiftFxBin>
+  </PropertyGroup>
+  <PropertyGroup>
+    <_QueueUpBin Condition="'$(_QueueUpBin)' == ''">..\Erbai.Modules.QueueUp\bin\$(Configuration)\net8.0</_QueueUpBin>
+    <_GiftFxBin Condition="'$(_GiftFxBin)' == ''">..\Erbai.Modules.GiftFx\bin\$(Configuration)\net8.0</_GiftFxBin>
+  </PropertyGroup>
+
   <Target Name="CopyBuiltinPluginsBuild" AfterTargets="Build">
-    <Copy SourceFiles="..\Erbai.Modules.QueueUp\bin\$(Configuration)\net8.0\Erbai.Modules.QueueUp.dll"
+    <Copy SourceFiles="$(_QueueUpBin)\Erbai.Modules.QueueUp.dll"
           DestinationFolder="$(OutDir)Plugins\queueup\" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\Erbai.Modules.GiftFx\bin\$(Configuration)\net8.0\Erbai.Modules.GiftFx.dll"
+    <Copy SourceFiles="$(_GiftFxBin)\Erbai.Modules.GiftFx.dll"
           DestinationFolder="$(OutDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
     <Copy SourceFiles="Plugins\queueup\config.ini" DestinationFolder="$(OutDir)Plugins\queueup\" SkipUnchangedFiles="true" />
     <Copy SourceFiles="Plugins\giftfx\config.ini" DestinationFolder="$(OutDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
@@ -104,9 +116,9 @@
 
   <!-- 发布钩子：Plugins/ 布局独立拷到 publish 目录（安装器/zip 按真实目录打包）。 -->
   <Target Name="CopyBuiltinPluginsPublish" AfterTargets="Publish">
-    <Copy SourceFiles="..\Erbai.Modules.QueueUp\bin\$(Configuration)\net8.0\Erbai.Modules.QueueUp.dll"
+    <Copy SourceFiles="$(_QueueUpBin)\Erbai.Modules.QueueUp.dll"
           DestinationFolder="$(PublishDir)Plugins\queueup\" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\Erbai.Modules.GiftFx\bin\$(Configuration)\net8.0\Erbai.Modules.GiftFx.dll"
+    <Copy SourceFiles="$(_GiftFxBin)\Erbai.Modules.GiftFx.dll"
           DestinationFolder="$(PublishDir)Plugins\giftfx\" SkipUnchangedFiles="true" />
     <Copy SourceFiles="Plugins\queueup\config.ini" DestinationFolder="$(PublishDir)Plugins\queueup\" SkipUnchangedFiles="true" />
     <Copy SourceFiles="Plugins\giftfx\config.ini" DestinationFolder="$(PublishDir)Plugins\giftfx\" SkipUnchangedFiles="true" />

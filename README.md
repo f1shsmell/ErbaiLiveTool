@@ -2,6 +2,8 @@
 
 抖音 / B站直播弹幕驱动的点歌与互动工具。Windows 桌面应用（.NET 8 + WinAppSDK）。
 
+<p align="center"><img src="docs/assets/screenshot.png" alt="ErbaiLiveTool 概览" width="760"></p>
+
 ## 功能
 
 - **弹幕接入** — B站（WebSocket 协议 + 扫码登录）、抖音（系统代理抓包，内置抓包器宿主）
