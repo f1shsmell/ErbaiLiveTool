@@ -67,15 +67,27 @@ public sealed class EmptyState : ContentControl
 
     public EmptyState()
     {
-        _icon.SetValue(Control.FontSizeProperty, 28.0);
+        _icon.SetValue(Control.FontSizeProperty, 22.0);
+        // 品牌章（2026-10 布局样式轮）：与 PageHeader 同一视觉语言——
+        // 低饱和品牌色圆角章 + 品牌色图标，替代裸图标
+        var chip = new Border
+        {
+            Width = 52,
+            Height = 52,
+            CornerRadius = new CornerRadius(13),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Background = (Brush)Application.Current.Resources["BrandChipBackgroundBrush"],
+            Child = _icon,
+        };
+        _icon.Foreground = (Brush)Application.Current.Resources["BrandAccentBrush"];
 
         var stack = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = 6,
+            Spacing = 8,
         };
-        stack.Children.Add(_icon);
+        stack.Children.Add(chip);
         stack.Children.Add(_title);
         stack.Children.Add(_subtitle);
 

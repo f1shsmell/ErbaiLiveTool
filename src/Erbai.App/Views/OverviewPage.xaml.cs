@@ -1,8 +1,9 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Erbai.App.Services;
 using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Live;
 using Erbai.Contracts.Queue;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -12,14 +13,27 @@ namespace Erbai.App.Views;
 
 public sealed partial class OverviewPage : Page
 {
-    private readonly System.Threading.CancellationTokenSource _cts = new();
-    private readonly Subscription<QueueEventEnvelope> _queueSub;
-    private readonly Subscription<Erbai.Contracts.QueueUp.QueueUpEventEnvelope> _queueUpSub;
+    private readonly List<IDisposable> _pumps = [];
 
     // 实时事件预览（LiveEventFormat 与日志页共用）
     private const int PreviewMax = 100;
+
+    /// <summary>实时预览批量刷新间隔（ms）：与日志页同理，点赞/进入洪泛下逐条
+    /// TryEnqueue + 滚动会挤占 UI 线程，缓冲后按节拍一次刷新。</summary>
+    private const int PreviewFlushMs = 200;
+
+    /// <summary>连接状态轮询间隔（ms）：平台连接断了页面徽章不动是真实痛点
+    /// （状态只在进页/点击时计算），低频轮询补偿（代价可忽略）。</summary>
+    private const int StatusPollMs = 3000;
+
     private readonly ObservableCollection<DanmakuLogLine> _previewLines = [];
     private Subscription<LiveEvent>? _livePreviewSub;
+
+    /// <summary>待刷新的直播事件缓冲（线程池入队，UI 线程节拍转换着色）。</summary>
+    private List<LiveEvent> _pendingPreview = [];
+    private readonly object _previewLock = new();
+    private DispatcherQueueTimer? _previewTimer;
+    private DispatcherQueueTimer? _statusTimer;
 
     // 概览主区列表（队列/排队前几条，与 QueuePage/QueueUpPage 共用展示投影）
     private readonly ObservableCollection<QueueDisplay> _queueItems = [];
@@ -39,92 +53,81 @@ public sealed partial class OverviewPage : Page
         QueueList.ItemsSource = _queueItems;
         QueueUpList.ItemsSource = _queueUpItems;
 
+        _previewTimer = DispatcherQueue.CreateTimer();
+        _previewTimer.Interval = TimeSpan.FromMilliseconds(PreviewFlushMs);
+        _previewTimer.Tick += (_, _) => FlushPreview();
+
+        _statusTimer = DispatcherQueue.CreateTimer();
+        _statusTimer.Interval = TimeSpan.FromMilliseconds(StatusPollMs);
+        _statusTimer.Tick += (_, _) =>
+        {
+            UpdateBiliStatus();
+            UpdateDouyinStatus();
+        };
+        _statusTimer.Start();
+
         // 审计 T6-1：反复进入概览页会累积订阅表项与常驻任务（页面被订阅/闭包强引用无法回收）。
         Unloaded += (_, _) =>
         {
-            _cts.Cancel();
-            _queueSub?.Dispose();
-            _queueUpSub?.Dispose();
-            _livePreviewSub?.Dispose();
-            _cts.Dispose();
+            _previewTimer?.Stop();
+            _statusTimer?.Stop();
+            foreach (var p in _pumps) p.Dispose();
+            _pumps.Clear();
         };
 
-        _queueSub = services.Bus.Subscribe<QueueEventEnvelope>(capacity: 64);
-        var events = _queueSub.Reader;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var envelope in events.ReadAllAsync(_cts.Token))
-                {
-                    if (envelope.Data.QueueSnapshot is { } snapshot)
-                    {
-                        DispatcherQueue.TryEnqueue(() => Render(snapshot));
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        });
+        _pumps.Add(new Ux.ViewPump<QueueEventEnvelope>(services.Bus, DispatcherQueue, capacity: 64,
+            envelope => { if (envelope.Data.QueueSnapshot is { } snapshot) Render(snapshot); }));
 
         // 排队人数（阶段 5）：订阅 queueup.* 事件刷新
-        _queueUpSub = services.Bus.Subscribe<Erbai.Contracts.QueueUp.QueueUpEventEnvelope>(capacity: 64);
-        var queueUpEvents = _queueUpSub.Reader;
+        _pumps.Add(new Ux.ViewPump<Erbai.Contracts.QueueUp.QueueUpEventEnvelope>(services.Bus, DispatcherQueue, capacity: 64,
+            envelope => { if (envelope.Data.Snapshot is { } snapshot) RenderQueueUp(snapshot); }));
         var initialUp = services.QueueUp?.Service.Snapshot();
         QueueUpStatsText.Text = initialUp is null ? "0 / 0" : $"{initialUp.Total} / {initialUp.MaxEntries}";
         RenderQueueUp(initialUp);
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var envelope in queueUpEvents.ReadAllAsync(_cts.Token))
-                {
-                    if (envelope.Data.Snapshot is { } snapshot)
-                    {
-                        DispatcherQueue.TryEnqueue(() => RenderQueueUp(snapshot));
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        });
+
 
         // 初始快照：事件驱动页面切走再回来只有新事件才渲染——首次进入/往返
         // 时若有队列内容, 概览应直接显示（QueuePage 同款修复）
         _ = LoadInitialSnapshotAsync(services);
 
-        // 实时事件预览：订阅 live.* 事件流，滚动显示最近 N 条
-        _livePreviewSub = services.Bus.Subscribe<LiveEvent>(capacity: 512);
-        var livePreview = _livePreviewSub;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var evt in livePreview.Reader.ReadAllAsync(_cts.Token))
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        _previewLines.Add(new DanmakuLogLine(
-                            LiveEventFormat.Format(evt), LiveEventFormat.LightColorFor(evt), LiveEventFormat.CategoryFor(evt.Kind)));
-                        while (_previewLines.Count > PreviewMax)
-                        {
-                            _previewLines.RemoveAt(0);
-                        }
+        // 实时事件预览：订阅 live.* 事件流，缓冲后按节拍批量刷新（滚动显示最近 N 条）
+        _previewTimer.Start();
+        _pumps.Add(new Ux.ViewPump<LiveEvent>(services.Bus, DispatcherQueue, capacity: 512,
+            evt => { lock (_previewLock) _pendingPreview.Add(evt); }));
+    }
 
-                        PreviewCountText.Text = $"{_previewLines.Count} 条";
-                        if (PreviewList.Items.Count > 0)
-                        {
-                            PreviewList.ScrollIntoView(PreviewList.Items[^1]);
-                        }
-                    });
-                }
-            }
-            catch (OperationCanceledException)
+    /// <summary>节拍刷新实时预览（UI 线程）：批量转换着色 → 一次入列/裁剪/滚动。</summary>
+    private void FlushPreview()
+    {
+        List<LiveEvent> batch;
+        lock (_previewLock)
+        {
+            if (_pendingPreview.Count == 0)
             {
+                return;
             }
-        });
+
+            batch = _pendingPreview;
+            _pendingPreview = [];
+        }
+
+        foreach (var evt in batch)
+        {
+            _previewLines.Add(new DanmakuLogLine(
+                LiveEventFormat.Format(evt), LiveEventFormat.EventColorFor(evt, ActualTheme), LiveEventFormat.CategoryFor(evt.Kind)));
+        }
+
+        while (_previewLines.Count > PreviewMax)
+        {
+            _previewLines.RemoveAt(0);
+        }
+
+        PreviewCountText.Text = $"{_previewLines.Count} 条";
+        PreviewEmptyState.Visibility = _previewLines.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (PreviewList.Items.Count > 0)
+        {
+            PreviewList.ScrollIntoView(PreviewList.Items[^1]);
+        }
     }
 
     // ── 平台状态（评审第一轮 #8：统一连接状态：文字 + 圆点颜色 + 详情 + 启停按钮） ──
@@ -253,7 +256,8 @@ public sealed partial class OverviewPage : Page
             _queueItems.Add(new QueueDisplay(item));
         }
 
-        QueueEmptyText.Visibility = snapshot.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 以预览列表实际内容判定空态：仅剩"正在播放"一行时队列预览区确实是空的
+        QueueEmptyText.Visibility = _queueItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenderQueueUp(Erbai.Contracts.QueueUp.QueueUpSnapshot? snapshot)

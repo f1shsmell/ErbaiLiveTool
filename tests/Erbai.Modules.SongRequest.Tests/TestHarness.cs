@@ -28,6 +28,8 @@ namespace Erbai.Modules.SongRequest.Tests
             DedupeEnabled = true,
             DisplayOrder = "asc",
         },
+        // 提交/权限类测试大量同用户连续提交：默认关频率限制（专项测试自行开启）
+        Permissions = AppConfig.CreateDefault().Permissions with { RateLimitEnabled = false },
     };
 
     public static async Task<(SqliteStorageEngine Store, EventBus Bus, LogBus Logs, AppConfig Config,

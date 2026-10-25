@@ -10,6 +10,12 @@ namespace Erbai.Modules.QueueUp;
 /// + 礼物插队规则引擎。单一事实源 = 内存有序队列，写库持久化（重启按 created_at
 /// 恢复——插队位置不跨重启，最小版限制，交接说明注明）。
 /// 事件：queueup.added/updated/completed/cancelled/rejected（附完整快照）。
+///
+/// 锁模型（2026-10 修订）：<see cref="_gate"/>（信号量）串行化所有变更（含存储
+/// I/O，跨 await 持有）；<see cref="_dataLock"/>（轻量锁）只保护 _queue/_eligible
+/// 的内存读写、绝不跨 await。同步只读成员（Count/Snapshot/HasEligibility）因此
+/// 只等内存锁、不等 I/O——旧实现全部走阻塞 _gate.Wait()，UI 线程调用时会冻住
+/// 直到写方的存储 I/O 完成，且构成"持锁等 UI"的死锁隐患。
 /// </summary>
 public sealed class QueueUpService : IQueueUpService
 {
@@ -20,7 +26,12 @@ public sealed class QueueUpService : IQueueUpService
     /// <summary>配置读取函数（每次读现值，容量/资格门槛/规则热生效）。</summary>
     private readonly Func<AppConfig> _config;
 
+    /// <summary>变更串行化闸门：同一时刻至多一个变更（含存储 I/O）。</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>内存数据锁：保护 _queue/_eligible；持 _gate 者短暂持有，绝不跨 await。</summary>
+    private readonly object _dataLock = new();
+
     private readonly List<QueueUpEntry> _queue = []; // 活动队列，位置 0 = 队首
     private readonly HashSet<string> _eligible = []; // 会话内资格集（不持久化，重启清空）
 
@@ -36,14 +47,9 @@ public sealed class QueueUpService : IQueueUpService
     {
         get
         {
-            _gate.Wait();
-            try
+            lock (_dataLock)
             {
                 return _queue.Count;
-            }
-            finally
-            {
-                _gate.Release();
             }
         }
     }
@@ -55,9 +61,12 @@ public sealed class QueueUpService : IQueueUpService
         await _gate.WaitAsync(ct);
         try
         {
-            _queue.Clear();
-            _queue.AddRange(restored);
-            _eligible.Clear();
+            lock (_dataLock)
+            {
+                _queue.Clear();
+                _queue.AddRange(restored);
+                _eligible.Clear();
+            }
         }
         finally
         {
@@ -73,14 +82,9 @@ public sealed class QueueUpService : IQueueUpService
     /// <summary>当前快照（position 1 起动态编号）。</summary>
     public QueueUpSnapshot Snapshot()
     {
-        _gate.Wait();
-        try
+        lock (_dataLock)
         {
             return BuildSnapshotLocked();
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
@@ -112,10 +116,15 @@ public sealed class QueueUpService : IQueueUpService
             // 注意：已在队路径不收资格门槛限制（准入只针对新入队；重启后
             // 资格集被清空但队列从存储恢复——已入队用户必须仍能更新内容/插队，
             // 审计 T2-2）。
-            var existingIndex = _queue.FindIndex(e => e.UserId == userId);
-            if (existingIndex >= 0)
+            QueueUpEntry? existing;
+            lock (_dataLock)
             {
-                var existing = _queue[existingIndex];
+                var index = _queue.FindIndex(e => e.UserId == userId);
+                existing = index >= 0 ? _queue[index] : null;
+            }
+
+            if (existing is not null)
+            {
                 if (source == QueueUpSource.Danmaku)
                 {
                     var updated = await _storage.UpdateQueueUpEntryContentAsync(existing.Id, content, ct);
@@ -124,18 +133,26 @@ public sealed class QueueUpService : IQueueUpService
                         return new QueueUpOutcome(false, existing, "stale");
                     }
 
-                    _queue[existingIndex] = updated;
-                    PublishLocked("queueup.updated", updated, null);
+                    lock (_dataLock)
+                    {
+                        ReplaceByIdLocked(updated);
+                        PublishLocked("queueup.updated", updated, null);
+                    }
+
                     return new QueueUpOutcome(true, updated);
                 }
 
                 if (insertPosition is int giftPosition)
                 {
-                    // 礼物插队：移除后按目标名次（1 起，越界收敛）重新插入
-                    _queue.RemoveAt(existingIndex);
-                    var target = Math.Clamp(giftPosition - 1, 0, _queue.Count);
-                    _queue.Insert(target, existing);
-                    PublishLocked("queueup.updated", existing, null);
+                    // 礼物插队：移除后按目标名次（1 起，越界收敛）重新插入（纯内存，无 I/O）
+                    lock (_dataLock)
+                    {
+                        _queue.RemoveAll(e => e.Id == existing.Id);
+                        var target = Math.Clamp(giftPosition - 1, 0, _queue.Count);
+                        _queue.Insert(target, existing);
+                        PublishLocked("queueup.updated", existing, null);
+                    }
+
                     return new QueueUpOutcome(true, existing);
                 }
 
@@ -145,15 +162,33 @@ public sealed class QueueUpService : IQueueUpService
             }
 
             // 资格门槛（EligibilityGate 开）→ 无资格拒绝（仅新入队）
-            if (settings.QueueUp.EligibilityGate && !_eligible.Contains(userId))
+            bool eligible;
+            lock (_dataLock)
             {
-                return RejectLocked("not_eligible", entry: null);
+                eligible = !settings.QueueUp.EligibilityGate || _eligible.Contains(userId);
+            }
+
+            if (!eligible)
+            {
+                lock (_dataLock)
+                {
+                    return RejectLocked("not_eligible", entry: null);
+                }
             }
 
             // 队满
-            if (_queue.Count >= settings.QueueUp.MaxEntries)
+            int count;
+            lock (_dataLock)
             {
-                return RejectLocked("queue_full", entry: null);
+                count = _queue.Count;
+            }
+
+            if (count >= settings.QueueUp.MaxEntries)
+            {
+                lock (_dataLock)
+                {
+                    return RejectLocked("queue_full", entry: null);
+                }
             }
 
             var now = DateTimeOffset.UtcNow;
@@ -167,11 +202,15 @@ public sealed class QueueUpService : IQueueUpService
                 CreatedAt = now,
             };
             var stored = await _storage.InsertQueueUpEntryAsync(draft, ct);
-            var insertIndex = insertPosition is int p
-                ? Math.Clamp(p - 1, 0, _queue.Count)
-                : _queue.Count;
-            _queue.Insert(insertIndex, stored);
-            PublishLocked("queueup.added", stored, null);
+            lock (_dataLock)
+            {
+                var insertIndex = insertPosition is int p
+                    ? Math.Clamp(p - 1, 0, _queue.Count)
+                    : _queue.Count;
+                _queue.Insert(insertIndex, stored);
+                PublishLocked("queueup.added", stored, null);
+            }
+
             return new QueueUpOutcome(true, stored);
         }
         finally
@@ -186,10 +225,10 @@ public sealed class QueueUpService : IQueueUpService
         await _gate.WaitAsync(ct);
         try
         {
-            var index = _queue.FindIndex(e => e.UserId == userId);
-            return index < 0
+            var entry = FindLocked(e => e.UserId == userId);
+            return entry is null
                 ? new QueueUpOutcome(false)
-                : await RemoveLockedAsync(index, QueueUpStatus.Cancelled, ct);
+                : await RemoveEntryAsync(entry, QueueUpStatus.Cancelled, ct);
         }
         finally
         {
@@ -203,10 +242,10 @@ public sealed class QueueUpService : IQueueUpService
         await _gate.WaitAsync(ct);
         try
         {
-            var index = _queue.FindIndex(e => e.Id == entryId);
-            return index < 0
+            var entry = FindLocked(e => e.Id == entryId);
+            return entry is null
                 ? new QueueUpOutcome(false)
-                : await RemoveLockedAsync(index, QueueUpStatus.Cancelled, ct);
+                : await RemoveEntryAsync(entry, QueueUpStatus.Cancelled, ct);
         }
         finally
         {
@@ -220,9 +259,10 @@ public sealed class QueueUpService : IQueueUpService
         await _gate.WaitAsync(ct);
         try
         {
-            return _queue.Count == 0
+            var head = FindLocked(_ => true);
+            return head is null
                 ? new QueueUpOutcome(false, null, "empty")
-                : await RemoveLockedAsync(0, QueueUpStatus.Completed, ct);
+                : await RemoveEntryAsync(head, QueueUpStatus.Completed, ct);
         }
         finally
         {
@@ -233,47 +273,62 @@ public sealed class QueueUpService : IQueueUpService
     /// <summary>授予入队资格（规则 action=grant_eligibility；会话内有效）。</summary>
     public bool GrantEligibility(string userId)
     {
-        _gate.Wait();
-        try
+        lock (_dataLock)
         {
             return _eligible.Add(userId);
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
     /// <summary>是否有入队资格（EligibilityGate 关闭时恒 true，调用方不必查询）。</summary>
     public bool HasEligibility(string userId)
     {
-        _gate.Wait();
-        try
+        lock (_dataLock)
         {
             return _eligible.Contains(userId);
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
     // ---- 内部 ----
 
-    private async Task<QueueUpOutcome> RemoveLockedAsync(int index, QueueUpStatus status, CancellationToken ct)
+    /// <summary>持 _gate 下按条件查内存队列（_dataLock 内读取）。</summary>
+    private QueueUpEntry? FindLocked(Func<QueueUpEntry, bool> predicate)
     {
-        var entry = _queue[index];
-        var stored = await _storage.UpdateQueueUpEntryStatusAsync(entry.Id, status, ct);
-        if (stored is null)
+        lock (_dataLock)
         {
-            // 并发下已被他人出队（存储 CAS 拒绝）→ 移除内存并保持静默
-            _queue.RemoveAt(index);
-            return new QueueUpOutcome(false, entry, "stale");
+            var entry = _queue.FirstOrDefault(predicate);
+            return entry;
         }
+    }
 
-        _queue.RemoveAt(index);
-        PublishLocked(status == QueueUpStatus.Completed ? "queueup.completed" : "queueup.cancelled", stored, null);
-        return new QueueUpOutcome(true, stored);
+    /// <summary>
+    /// 出队（取消/完成）：存储 CAS 状态 → 内存移除 → 发事件。调用方必须持 _gate；
+    /// 存储调用不持 _dataLock（跨 await），落锁仅覆盖内存变更与发布。
+    /// </summary>
+    private async Task<QueueUpOutcome> RemoveEntryAsync(QueueUpEntry entry, QueueUpStatus status, CancellationToken ct)
+    {
+        var stored = await _storage.UpdateQueueUpEntryStatusAsync(entry.Id, status, ct);
+        lock (_dataLock)
+        {
+            _queue.RemoveAll(e => e.Id == entry.Id);
+            if (stored is null)
+            {
+                // 并发下已被他人出队（存储 CAS 拒绝）→ 内存移除并保持静默
+                return new QueueUpOutcome(false, entry, "stale");
+            }
+
+            PublishLocked(status == QueueUpStatus.Completed ? "queueup.completed" : "queueup.cancelled", stored, null);
+            return new QueueUpOutcome(true, stored);
+        }
+    }
+
+    /// <summary>按 Id 替换内存条目（持 _gate 单写者保证存在）。</summary>
+    private void ReplaceByIdLocked(QueueUpEntry updated)
+    {
+        var index = _queue.FindIndex(e => e.Id == updated.Id);
+        if (index >= 0)
+        {
+            _queue[index] = updated;
+        }
     }
 
     private QueueUpOutcome RejectLocked(string reason, QueueUpEntry? entry)

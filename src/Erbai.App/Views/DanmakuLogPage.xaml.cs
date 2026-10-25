@@ -7,6 +7,7 @@ using Erbai.Contracts.Live;
 using Erbai.Contracts.Logging;
 using Erbai.Contracts.Queue;
 using Erbai.Core.Logging;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -34,10 +35,28 @@ public sealed partial class DanmakuLogPage : Page
 {
     private const int MaxEntries = 1000;
 
+    /// <summary>实时事件批量刷新间隔（ms）：直播高峰点赞/进入事件可达每秒数十条，
+    /// 逐条 Append 会以每事件一次的频率整表重建可见列表（≤1000 行）+ 滚动——
+    /// UI 线程被弹幕洪泛挤占。缓冲原始事件、按节拍一次刷新（浏览体验差异不可感知）。</summary>
+    private const int FlushIntervalMs = 200;
+
+    /// <summary>搜索输入防抖间隔（ms）：每次按键全表重建改为停顿后一次重建。</summary>
+    private const int SearchDebounceMs = 250;
+
     /// <summary>全量日志行（筛选依据；超限裁剪）。</summary>
     private readonly List<DanmakuLogLine> _allLines = [];
 
     private readonly ObservableCollection<DanmakuLogLine> _lines = [];
+
+    /// <summary>待刷新的原始事件缓冲（LiveEvent / LogEntry / QueueEventEnvelope）。
+    /// 订阅循环（线程池）只入队纯数据；DanmakuLogLine 含 SolidColorBrush（WinUI
+    /// 线程亲和）一律在 UI 线程 Flush 时构造。</summary>
+    private List<object> _pendingRaw = [];
+    private readonly object _pendingLock = new();
+
+    private DispatcherQueueTimer? _flushTimer;
+    private DispatcherQueueTimer? _searchTimer;
+
     private CancellationTokenSource? _cts;
     private Subscription<LiveEvent>? _liveSub;
     private Subscription<LogEntry>? _logSub;
@@ -52,6 +71,19 @@ public sealed partial class DanmakuLogPage : Page
     {
         InitializeComponent();
         LogList.ItemsSource = _lines;
+
+        _flushTimer = DispatcherQueue.CreateTimer();
+        _flushTimer.Interval = TimeSpan.FromMilliseconds(FlushIntervalMs);
+        _flushTimer.Tick += (_, _) => FlushPending();
+
+        _searchTimer = DispatcherQueue.CreateTimer();
+        _searchTimer.Interval = TimeSpan.FromMilliseconds(SearchDebounceMs);
+        _searchTimer.IsRepeating = false;
+        _searchTimer.Tick += (_, _) =>
+        {
+            ApplyFilter();
+            CountText.Text = $"{_lines.Count} 条";
+        };
 
         // 生命周期配对：Loaded 每次进入统一 重载历史 + 重新订阅 + 定位最新；
         // Unloaded 退订并取消循环（阶段 6 防僵尸循环；QueueUpPage 同款模式）。
@@ -71,6 +103,7 @@ public sealed partial class DanmakuLogPage : Page
         var version = ++_historyVersion;
         _ = LoadHistoryAsync(version);
         StartSubscriptions();
+        _flushTimer?.Start();
 
         // 定位到最新（用户诉求：每次点进都要拖到底部很麻烦）。构造/重载时 ListView
         // 尚未布局，ScrollIntoView 无效——DispatcherQueue 延后一帧确保 ItemContainer 已生成。
@@ -126,12 +159,12 @@ public sealed partial class DanmakuLogPage : Page
                 batch.Add(BuildErrorLogLine(text, level));
             }
 
-            AppendBatch(batch);
+            AppendLines(batch);
         });
     }
 
     /// <summary>构造系统日志文件行（UI 线程；颜色按行内级别标记）。</summary>
-    private static DanmakuLogLine BuildFileLogLine(string line)
+    private DanmakuLogLine BuildFileLogLine(string line)
     {
         var color = line.Contains("[WRN]", StringComparison.Ordinal) ? LogColorFor(LogLevel.Warning)
             : line.Contains("[ERR]", StringComparison.Ordinal) ? LogColorFor(LogLevel.Error)
@@ -146,7 +179,7 @@ public sealed partial class DanmakuLogPage : Page
     }
 
     /// <summary>构造错误/提示行（UI 线程；读取失败、未找到文件等）。</summary>
-    private static DanmakuLogLine BuildErrorLogLine(string text, LogLevel level) =>
+    private DanmakuLogLine BuildErrorLogLine(string text, LogLevel level) =>
         new($"[错误] {text}", LogColorFor(level), DanmakuLogCategory.Tool)
         {
             TypeText = "工具",
@@ -159,6 +192,9 @@ public sealed partial class DanmakuLogPage : Page
         _cts = new CancellationTokenSource();
         var services = App.Services;
 
+        // 订阅循环只做「原始事件入缓冲」：格式化/着色（含 SolidColorBrush 构造）
+        // 全部延后到 UI 线程的 FlushPending 按节拍批量做——这是弹幕洪泛下
+        // UI 线程不被挤占的关键（此前每事件一次 TryEnqueue + 整表重建）。
         _liveSub = services.Bus.Subscribe<LiveEvent>(capacity: 1024);
         var live = _liveSub;
         _ = Task.Run(async () =>
@@ -167,7 +203,7 @@ public sealed partial class DanmakuLogPage : Page
             {
                 await foreach (var evt in live.Reader.ReadAllAsync(_cts!.Token))
                 {
-                    DispatcherQueue.TryEnqueue(() => Append(ToLine(evt)));
+                    BufferRaw(evt);
                 }
             }
             catch (OperationCanceledException)
@@ -183,17 +219,7 @@ public sealed partial class DanmakuLogPage : Page
             {
                 await foreach (var entry in logs.Reader.ReadAllAsync(_cts!.Token))
                 {
-                    var ts = entry.Timestamp.ToLocalTime();
-                    DispatcherQueue.TryEnqueue(() => Append(new DanmakuLogLine(
-                        $"[{ts:HH:mm:ss}] [系统] {entry.Message}",
-                        LogColorFor(entry.Level),
-                        DanmakuLogCategory.Tool)
-                    {
-                        Time = $"{ts:HH:mm:ss}",
-                        TypeText = "工具",
-                        SourceText = "系统",
-                        Detail = entry.Message,
-                    }));
+                    BufferRaw(entry);
                 }
             }
             catch (OperationCanceledException)
@@ -210,23 +236,88 @@ public sealed partial class DanmakuLogPage : Page
             {
                 await foreach (var envelope in queue.Reader.ReadAllAsync(_cts!.Token))
                 {
-                    var ts = envelope.Timestamp.ToLocalTime();
-                    DispatcherQueue.TryEnqueue(() => Append(new DanmakuLogLine(
-                        $"[{ts:HH:mm:ss}] [队列] {FormatQueue(envelope)}",
-                        LogColorFor(LogLevel.Information),
-                        DanmakuLogCategory.Tool)
-                    {
-                        Time = $"{ts:HH:mm:ss}",
-                        TypeText = "工具",
-                        SourceText = "队列",
-                        Detail = FormatQueue(envelope),
-                    }));
+                    BufferRaw(envelope);
                 }
             }
             catch (OperationCanceledException)
             {
             }
         });
+    }
+
+    /// <summary>原始事件入缓冲（线程池线程调用；纯数据对象，无 UI 亲和）。</summary>
+    private void BufferRaw(object raw)
+    {
+        lock (_pendingLock)
+        {
+            _pendingRaw.Add(raw);
+        }
+    }
+
+    /// <summary>
+    /// 批量刷新（UI 线程，节拍定时器驱动）：取出缓冲的原始事件 → 构造展示行 →
+    /// 一次入列/裁剪/过滤/滚动。无筛选时增式追加（不动现有行），有筛选时整表重建
+    /// ——两路径都从「每事件一次」降为「每节拍一次」。
+    /// </summary>
+    private void FlushPending()
+    {
+        List<object> batch;
+        lock (_pendingLock)
+        {
+            if (_pendingRaw.Count == 0)
+            {
+                return;
+            }
+
+            batch = _pendingRaw;
+            _pendingRaw = [];
+        }
+
+        var lines = new List<DanmakuLogLine>(batch.Count);
+        foreach (var raw in batch)
+        {
+            lines.Add(raw switch
+            {
+                LiveEvent evt => ToLine(evt),
+                LogEntry entry => BuildLogEntryLine(entry),
+                QueueEventEnvelope envelope => BuildQueueLine(envelope),
+                _ => ToLine((LiveEvent)raw),
+            });
+        }
+
+        AppendLines(lines);
+    }
+
+    /// <summary>系统日志事件 → 展示行（UI 线程）。</summary>
+    private DanmakuLogLine BuildLogEntryLine(LogEntry entry)
+    {
+        var ts = entry.Timestamp.ToLocalTime();
+        return new DanmakuLogLine(
+            $"[{ts:HH:mm:ss}] [系统] {entry.Message}",
+            LogColorFor(entry.Level),
+            DanmakuLogCategory.Tool)
+        {
+            Time = $"{ts:HH:mm:ss}",
+            TypeText = "工具",
+            SourceText = "系统",
+            Detail = entry.Message,
+        };
+    }
+
+    /// <summary>点歌流水事件 → 展示行（UI 线程）。</summary>
+    private DanmakuLogLine BuildQueueLine(QueueEventEnvelope envelope)
+    {
+        var ts = envelope.Timestamp.ToLocalTime();
+        return new DanmakuLogLine(
+            $"[{ts:HH:mm:ss}] [队列] {FormatQueue(envelope)}",
+            LogColorFor(LogLevel.Information),
+            DanmakuLogCategory.Tool)
+        {
+            Time = $"{ts:HH:mm:ss}",
+            TypeText = "工具",
+            SourceText = "队列",
+            Detail = FormatQueue(envelope),
+        };
     }
 
     /// <summary>在资源管理器中打开日志目录（logs/，随附文件语义见 AppPaths；不存在则先创建）。</summary>
@@ -246,6 +337,7 @@ public sealed partial class DanmakuLogPage : Page
 
     private void StopSubscriptions()
     {
+        _flushTimer?.Stop();
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
@@ -257,12 +349,12 @@ public sealed partial class DanmakuLogPage : Page
         _queueSub = null;
     }
 
-    /// <summary>颜色用浅色背景色板（<see cref="LiveEventFormat.LightColorFor"/>，深色文字白底可读）。</summary>
-    private static DanmakuLogLine ToLine(LiveEvent evt)
+    /// <summary>颜色用主题感知色板（<see cref="LiveEventFormat.EventColorFor"/>，2026-10 起深浅主题各自可读）。</summary>
+    private DanmakuLogLine ToLine(LiveEvent evt)
     {
         var ts = evt.Timestamp.ToLocalTime();
         var full = LiveEventFormat.Format(evt);
-        return new DanmakuLogLine(full, LiveEventFormat.LightColorFor(evt), LiveEventFormat.CategoryFor(evt.Kind))
+        return new DanmakuLogLine(full, LiveEventFormat.EventColorFor(evt, ActualTheme), LiveEventFormat.CategoryFor(evt.Kind))
         {
             Time = $"{ts:HH:mm:ss}",
             TypeText = CategoryTextFor(LiveEventFormat.CategoryFor(evt.Kind)),
@@ -385,28 +477,13 @@ public sealed partial class DanmakuLogPage : Page
     private static List<string> ReadTailLinesShared(string path, int maxLines) =>
         LogFileTail.ReadTailLinesShared(path, maxLines);
 
-    private void Append(DanmakuLogLine line)
-    {
-        _allLines.Add(line);
-        while (_allLines.Count > MaxEntries)
-        {
-            _allLines.RemoveAt(0);
-        }
-
-        ApplyFilter();
-        CountText.Text = $"{_lines.Count} 条";
-        if (AutoScrollToggle.IsOn && LogList.Items.Count > 0)
-        {
-            LogList.ScrollIntoView(LogList.Items[^1]);
-        }
-    }
-
     /// <summary>
-    /// 批量追加（历史加载用）：一次入列 + 一次裁剪 + 一次过滤 + 一次滚动。
-    /// 旧实现逐条调 <see cref="Append"/>——打开日志页时数千行历史会触发数千次
-    /// ApplyFilter（每次遍历全量）与滚动，"打开卡很久"的另一主因。
+    /// 追加展示行（实时批量与历史加载共用）：一次入列 + 一次裁剪 + 一次过滤 + 一次滚动。
+    /// 无筛选（默认全开、来源全部、无关键词）时走增式追加——不动现有行、不重建；
+    /// 有筛选时整表重建（频率已被节拍限流）。旧实时路径逐行调用，每行一次
+    /// ApplyFilter（遍历全量）+ 一次滚动，弹幕高峰时 UI 线程被占满。
     /// </summary>
-    private void AppendBatch(IReadOnlyList<DanmakuLogLine> lines)
+    private void AppendLines(IReadOnlyList<DanmakuLogLine> lines)
     {
         if (lines.Count == 0)
         {
@@ -419,7 +496,23 @@ public sealed partial class DanmakuLogPage : Page
             _allLines.RemoveAt(0);
         }
 
-        ApplyFilter();
+        if (IsFilterActive())
+        {
+            ApplyFilter();
+        }
+        else
+        {
+            foreach (var line in lines)
+            {
+                _lines.Add(line);
+            }
+
+            while (_lines.Count > MaxEntries)
+            {
+                _lines.RemoveAt(0);
+            }
+        }
+
         CountText.Text = $"{_lines.Count} 条";
         if (AutoScrollToggle.IsOn && LogList.Items.Count > 0)
         {
@@ -427,12 +520,31 @@ public sealed partial class DanmakuLogPage : Page
         }
     }
 
+    /// <summary>是否处于非默认筛选（增式追加仅适用于"全可见"状态）。</summary>
+    private bool IsFilterActive()
+    {
+        if ((SearchBox.Text?.Trim() ?? "").Length > 0)
+        {
+            return true;
+        }
+
+        if (SourceBiliBtn.IsChecked == true || SourceDouyinBtn.IsChecked == true || SourceSystemBtn.IsChecked == true)
+        {
+            return true;
+        }
+
+        return FilterDanmakuBtn.IsChecked != true || FilterGiftBtn.IsChecked != true ||
+               FilterFollowBtn.IsChecked != true || FilterLikeBtn.IsChecked != true ||
+               FilterToolBtn.IsChecked != true || FilterOtherBtn.IsChecked != true;
+    }
+
     // ── 筛选（评审第一轮 #7：类型多选、来源单选、搜索；全选为动作不再与多选冲突） ──
 
     private void OnSearchChanged(object sender, TextChangedEventArgs e)
     {
-        ApplyFilter();
-        CountText.Text = $"{_lines.Count} 条";
+        // 搜索防抖：停顿 SearchDebounceMs 后一次重建（旧实现每次按键整表重建）
+        _searchTimer?.Stop();
+        _searchTimer?.Start();
     }
 
     private void OnFilterToggled(object sender, RoutedEventArgs e)
@@ -578,17 +690,8 @@ public sealed partial class DanmakuLogPage : Page
         return $"{action}{detail}";
     }
 
-    /// <summary>系统/工具行文字色（浅色背景可读：错误深红、警告深琥珀、普通深灰）。</summary>
-    private static Brush LogColorFor(LogLevel level) => level switch
-    {
-        LogLevel.Error or LogLevel.Fatal => Solid("#C62828"),
-        LogLevel.Warning => Solid("#B26A00"),
-        _ => Solid("#616161"),
-    };
-
-    private static Brush Solid(string hex) =>
-        new SolidColorBrush(Windows.UI.Color.FromArgb(255,
-            Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16)));
+    /// <summary>系统/工具行文字色（主题感知：深色主题用亮色调，浅色主题保持原深色调）。</summary>
+    private Brush LogColorFor(LogLevel level) => LiveEventFormat.LogLevelColorFor(level, ActualTheme);
 }
 
 /// <summary>

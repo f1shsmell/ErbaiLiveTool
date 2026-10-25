@@ -9,10 +9,8 @@
         <StackPanel Padding="24" Spacing="16">
 
             <!-- 标题区 -->
-            <StackPanel Spacing="2">
-                <TextBlock Text="概览" Style="{StaticResource PageTitleTextStyle}" />
-                <TextBlock Text="平台连接、当前播放与待处理队列（悬浮窗样式已移至「显示与悬浮窗」页）" Style="{StaticResource CaptionTextStyle}" />
-            </StackPanel>
+            <ux:PageHeader Icon="Home" Title="概览"
+                           Subtitle="平台连接、当前播放与待处理队列（悬浮窗样式已移至「显示与悬浮窗」页）" />
 
             <!-- 平台连接（统一连接状态：#8 未配置/未连接/已连接/异常，文字+圆点+颜色） -->
             <Grid ColumnSpacing="12">
@@ -22,7 +20,13 @@
                 </Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
                     <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border Width="32" Height="32" CornerRadius="8" VerticalAlignment="Center">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#FB7299" Opacity="0.16" />
+                                </Border.Background>
+                                <FontIcon Glyph="&#xE7F4;" FontSize="15" Foreground="#FB7299" />
+                            </Border>
                             <TextBlock Text="B站直播" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <ux:StatusBadge x:Name="BiliBadge" />
                             <TextBlock x:Name="BiliDetailText" Text="-" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -36,7 +40,13 @@
                 </Border>
                 <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
                     <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border Width="32" Height="32" CornerRadius="8" VerticalAlignment="Center">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#25F4EE" Opacity="0.14" />
+                                </Border.Background>
+                                <FontIcon Glyph="&#xE8D6;" FontSize="15" Foreground="#0EA5A0" />
+                            </Border>
                             <TextBlock Text="抖音直播" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <ux:StatusBadge x:Name="DouyinBadge" />
                             <TextBlock x:Name="DouyinDetailText" Text="-" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -81,7 +91,11 @@
                             <TextBlock Text="正在播放" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
                             <TextBlock x:Name="PlayerText" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <TextBlock x:Name="CurrentSongText" Text="暂无" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border Width="4" CornerRadius="2" Background="{ThemeResource BrandAccentBrush}" />
+                            <TextBlock x:Name="CurrentSongText" Text="暂无" FontSize="20" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        </StackPanel>
                         <Border Style="{StaticResource CardDividerStyle}" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="歌曲队列" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
@@ -153,19 +167,24 @@
                         <TextBlock x:Name="PreviewCountText" Text="0 条" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
                         <TextBlock Text="B站 / 抖音 弹幕 · 礼物 · 关注 · 点赞等 · 完整流水见「日志」页" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <ListView x:Name="PreviewList" Height="220" SelectionMode="None">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="4,2" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="views:DanmakuLogLine">
-                                <TextBlock Text="{x:Bind Line}" Foreground="{x:Bind Color}" TextWrapping="Wrap" FontSize="12" />
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <Grid>
+                        <ListView x:Name="PreviewList" Height="220" SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="views:DanmakuLogLine">
+                                    <TextBlock Text="{x:Bind Line}" Foreground="{x:Bind Color}" TextWrapping="Wrap" FontSize="12" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <ux:EmptyState x:Name="PreviewEmptyState" Symbol="Comment"
+                                       Title="暂无直播事件"
+                                       Subtitle="启动平台监听后，弹幕、礼物、关注、点赞等事件会在这里实时滚动。" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </StackPanel>

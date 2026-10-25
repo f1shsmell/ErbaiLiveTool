@@ -1,4 +1,4 @@
-using Erbai.Contracts.Logging;
+﻿using Erbai.Contracts.Logging;
 
 namespace Erbai.Core.Hosting;
 
@@ -245,18 +245,6 @@ public sealed class PlatformSupervisor
         }
 
         return null;
-    }
-
-    /// <summary>重启平台（先停后启；stop 超时则拒绝启动）。</summary>
-    public async Task<SupervisorResult> RestartAsync(string name, CancellationToken ct = default)
-    {
-        var stopped = await StopAsync(name);
-        if (stopped.Error.Length > 0)
-        {
-            return stopped;
-        }
-
-        return await StartAsync(name, ct);
     }
 
     /// <summary>当前平台状态快照（UI/日志查询）。</summary>

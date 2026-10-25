@@ -1,10 +1,11 @@
-using System.Net.WebSockets;
+﻿using System.Net.WebSockets;
 using System.Text;
 using System.Threading.Channels;
 using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Live;
 using Erbai.Contracts.Logging;
 using Erbai.Contracts.Plugins;
+using Erbai.Core.Hosting;
 using Erbai.Live.Douyin.Messages;
 
 namespace Erbai.Live.Douyin;
@@ -14,33 +15,56 @@ namespace Erbai.Live.Douyin;
 /// <c>{Type, Data}</c> 报文经 <see cref="DouyinMessageParser"/> 归一为 <see cref="LiveEvent"/>。
 /// - WS 连接工厂可注入（对齐 BilibiliLivePlugin 的 wsUriFactory 先例；测试用假 WS 服务器）；
 /// - 断线固定延迟重连（默认 5s，旧 run_douyin_client 语义）；
+/// - <b>Grabber 死亡自愈（2026-10 长稳轮）</b>：连续 <see cref="ReviveMinFailures"/> 次连接失败
+///   （连不上本地 WS 端口）≈ 抓包器进程已死，经 <see cref="Reviver"/> 回调让宿主重拉
+///   Grabber（组合根接 DouyinGrabberHost.StartAsync：端口活着即幂等 adopt，死了即重新拉起）；
+///   两次拉起之间至少间隔 <see cref="ReviveThrottle"/>（防拉起风暴）。
 /// - 循环内任何异常不得逃逸（worker 不变量）。
 /// </summary>
-public sealed class DouyinLivePlugin : ILivePlatformPlugin
+public sealed class DouyinLivePlugin : LivePluginBase
 {
     private static readonly TimeSpan DefaultReconnectDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>触发自愈前需要的连续连接失败次数（每次失败间隔一个重连延迟）。</summary>
+    internal const int ReviveMinFailures = 3;
+
+    /// <summary>两次自愈拉起之间的最小间隔（拉起含 30×0.25s 端口探测，防风暴）。</summary>
+    internal static readonly TimeSpan ReviveThrottle = TimeSpan.FromSeconds(30);
 
     private readonly ILogBus? _logs;
     private readonly TimeSpan _reconnectDelay;
     private readonly Func<Uri, ClientWebSocket> _wsFactory;
     private volatile IReadOnlySet<string> _allowedRoomIds;
-    private Channel<LiveEvent> _events;
-    private readonly object _sync = new();
-    private CancellationTokenSource? _cts;
-    private Task? _loop;
+    // ── Grabber 自愈状态（仅监听循环线程读写，无需加锁） ──
+    private Func<CancellationToken, Task>? _reviver;
+    private TimeSpan _reviveThrottle = ReviveThrottle;
+    private int _consecutiveConnectFailures;
+    private DateTimeOffset _lastReviveAt = DateTimeOffset.MinValue;
 
     public DouyinLivePlugin(
         ILogBus? logs = null,
         TimeSpan? reconnectDelay = null,
         Func<Uri, ClientWebSocket>? wsFactory = null,
-        IReadOnlySet<string>? allowedRoomIds = null)
+        IReadOnlySet<string>? allowedRoomIds = null,
+        Func<CancellationToken, Task>? reviver = null,
+        TimeSpan? reviveThrottle = null)
     {
         _logs = logs;
         _reconnectDelay = reconnectDelay ?? DefaultReconnectDelay;
         _wsFactory = wsFactory ?? (_ => new ClientWebSocket());
         _allowedRoomIds = allowedRoomIds ?? new HashSet<string>(StringComparer.Ordinal);
-        _events = CreateEventChannel();
+        _reviver = reviver;
+        if (reviveThrottle is { } throttle)
+        {
+            _reviveThrottle = throttle;
+        }
     }
+
+    /// <summary>
+    /// 运行时注入/更新自愈回调（组合根在装配完 GrabberHost 后调用；返回 false 的回调
+    /// 会被忽略）。回调异常被循环隔离——自愈失败只是下一次失败窗口再试。
+    /// </summary>
+    public void SetReviver(Func<CancellationToken, Task>? reviver) => _reviver = reviver;
 
     /// <summary>运行时更新房间白名单（重启平台前由组合根按最新配置调用；原子替换引用）。</summary>
     public void UpdateRoomFilter(IEnumerable<string> roomIds)
@@ -48,102 +72,23 @@ public sealed class DouyinLivePlugin : ILivePlatformPlugin
         _allowedRoomIds = roomIds.ToHashSet(StringComparer.Ordinal);
     }
 
-    public string Key => "douyin";
+    public override string Key => "douyin";
 
-    public string DisplayName => "抖音弹幕";
+    public override string DisplayName => "抖音弹幕";
 
-    public LiveCapabilities Capabilities =>
+    public override LiveCapabilities Capabilities =>
         LiveCapabilities.Danmaku | LiveCapabilities.Gift | LiveCapabilities.Enter |
         LiveCapabilities.Follow | LiveCapabilities.Share | LiveCapabilities.Like |
         LiveCapabilities.LiveState;
 
-    public ChannelReader<LiveEvent> Events
+    public override Task StartAsync(AppConfig config, CancellationToken ct)
     {
-        get
-        {
-            lock (_sync)
-            {
-                return _events.Reader;
-            }
-        }
-    }
-
-    /// <summary>监听循环是否在跑（UI 启停按钮状态用）。</summary>
-    public bool IsRunning
-    {
-        get
-        {
-            lock (_sync)
-            {
-                return _loop is { IsCompleted: false };
-            }
-        }
-    }
-
-    public Task StartAsync(AppConfig config, CancellationToken ct)
-    {
-        lock (_sync)
-        {
-            if (_loop is { IsCompleted: false })
-            {
-                return Task.CompletedTask;
-            }
-
-            _events = CreateEventChannel();
-            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var wsUrl = string.IsNullOrWhiteSpace(config.DouyinWsUrl)
-                ? new Uri("ws://127.0.0.1:8888")
-                : new Uri(config.DouyinWsUrl);
-            _loop = Task.Run(() => RunLoopAsync(wsUrl, _cts.Token), CancellationToken.None);
-        }
-
+        var wsUrl = string.IsNullOrWhiteSpace(config.DouyinWsUrl)
+            ? new Uri("ws://127.0.0.1:8888")
+            : new Uri(config.DouyinWsUrl);
+        StartLoop(token => RunLoopAsync(wsUrl, token));
         return Task.CompletedTask;
     }
-
-    public async Task StopAsync()
-    {
-        Task? loop;
-        CancellationTokenSource? cts;
-        Channel<LiveEvent>? events;
-        lock (_sync)
-        {
-            loop = _loop;
-            cts = _cts;
-            events = _events;
-            _loop = null;
-            _cts = null;
-        }
-
-        if (cts is null)
-        {
-            return;
-        }
-
-        cts.Cancel();
-        if (loop is not null)
-        {
-            try
-            {
-                await loop;
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        }
-
-        events.Writer.TryComplete();
-        cts.Dispose();
-    }
-
-    private static Channel<LiveEvent> CreateEventChannel() =>
-        Channel.CreateBounded<LiveEvent>(new BoundedChannelOptions(256)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = true,
-        });
-
-    public async ValueTask DisposeAsync() => await StopAsync();
 
     // ── 主循环：连接 → 收报文解析 → 断开重连 ────────────────────────────────
 
@@ -154,6 +99,7 @@ public sealed class DouyinLivePlugin : ILivePlatformPlugin
             try
             {
                 await ConnectAndListenAsync(wsUrl, ct);
+                _consecutiveConnectFailures = 0; // 连接过（哪怕已断开）：抓包器活着
                 _logs?.Warning($"[抖音] 连接断开，{_reconnectDelay.TotalSeconds:0.#}s 后重连");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -163,6 +109,7 @@ public sealed class DouyinLivePlugin : ILivePlatformPlugin
             catch (WebSocketException ex)
             {
                 _logs?.Warning($"[抖音] 连接失败（{ex.Message}），{_reconnectDelay.TotalSeconds:0.#}s 后重连");
+                await MaybeReviveGrabberAsync(ct);
             }
             catch (IOException ex)
             {
@@ -174,6 +121,50 @@ public sealed class DouyinLivePlugin : ILivePlatformPlugin
             }
 
             await DelayOrCancel(_reconnectDelay, ct);
+        }
+    }
+
+    /// <summary>
+    /// 连接失败时的 Grabber 自愈：连续失败达阈值且距上次拉起超过节流窗，回调宿主重拉。
+    /// 回调异常/未注入都不影响重连循环（下一次失败窗口再试）。
+    /// </summary>
+    private async Task MaybeReviveGrabberAsync(CancellationToken ct)
+    {
+        var reviver = _reviver;
+        if (reviver is null)
+        {
+            return;
+        }
+
+        _consecutiveConnectFailures++;
+        if (_consecutiveConnectFailures < ReviveMinFailures)
+        {
+            return;
+        }
+
+        if (DateTimeOffset.UtcNow - _lastReviveAt < _reviveThrottle)
+        {
+            return;
+        }
+
+        _lastReviveAt = DateTimeOffset.UtcNow;
+        try
+        {
+            _logs?.Warning($"[抖音] 本地弹幕端口连续 {_consecutiveConnectFailures} 次连不上，尝试重新拉起抓包器");
+            await reviver(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logs?.Warning($"[抖音] 拉起抓包器失败（稍后再试）：{ex.Message}");
+        }
+        finally
+        {
+            // 计数复位：失败-拉起-等下一窗口，而不是每次失败都触发判定
+            _consecutiveConnectFailures = 0;
         }
     }
 
@@ -207,19 +198,9 @@ public sealed class DouyinLivePlugin : ILivePlatformPlugin
                 error => _logs?.Warning($"[抖音] {error}"));
             if (evt is not null)
             {
-                _events.Writer.TryWrite(evt);
+                EventWriter.TryWrite(evt);
             }
         }
     }
 
-    private async Task DelayOrCancel(TimeSpan delay, CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(delay, ct);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
 }

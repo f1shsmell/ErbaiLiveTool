@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Erbai.Contracts.Logging;
@@ -343,13 +343,6 @@ public sealed class BilibiliLoginService
         _api.ApplyCookies(cookies);
         CurrentCredentials = cookies;
         _logs?.Information("[登录] 凭据已保存（DPAPI 保护）");
-    }
-
-    private void ClearAsync()
-    {
-        _credentials.Delete();
-        CurrentCredentials = null;
-        _logs?.Warning("[登录] 已清除失效凭据");
     }
 
     /// <summary>从扫码 poll 成功响应提取登录三件套（优先响应 Set-Cookie，其次容器）。</summary>

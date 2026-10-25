@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Erbai.App.Views.QueueUpPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -13,10 +13,8 @@
         </Grid.RowDefinitions>
 
         <!-- 标题 -->
-        <StackPanel Spacing="2">
-            <TextBlock Text="排队队列" Style="{StaticResource PageTitleTextStyle}" />
-            <TextBlock Text="弹幕命令：排队 [内容] / 取消排队 / 完成（仅主播/管理员）" Style="{StaticResource CaptionTextStyle}" />
-        </StackPanel>
+        <ux:PageHeader Icon="People" Title="排队队列"
+                       Subtitle="弹幕命令：排队 [内容] / 取消排队 / 完成（仅主播/管理员）" />
 
         <!-- 统计 + 操作（观感打磨第二轮：孤立数字 → 统计数字对，与页首摘要区统一） -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
@@ -37,16 +35,17 @@
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        <Setter Property="Padding" Value="0,4" />
+                        <Setter Property="MinHeight" Value="48" />
+                        <Setter Property="CornerRadius" Value="6" />
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="views:QueueUpDisplay">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{x:Bind PositionText}" FontWeight="SemiBold" MinWidth="24" VerticalAlignment="Center" />
-                            <StackPanel>
-                                <TextBlock Text="{x:Bind TitleText}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind SubText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="{x:Bind PositionText, Mode=OneWay}" FontWeight="SemiBold" MinWidth="24" VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind TitleText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind SubText, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
                         </StackPanel>
                     </DataTemplate>

@@ -1,4 +1,4 @@
-namespace Erbai.Contracts.Requests;
+﻿namespace Erbai.Contracts.Requests;
 
 /// <summary>
 /// 点歌请求生命周期状态（11 态）。
@@ -15,7 +15,6 @@ public enum RequestStatus
     Skipped,
     Cancelled,
     Failed,
-    RecoveryRequired,
 }
 
 public static class RequestStatuses
@@ -37,7 +36,6 @@ public static class RequestStatuses
         RequestStatus.Skipped,
         RequestStatus.Cancelled,
         RequestStatus.Failed,
-        RequestStatus.RecoveryRequired,
     };
 
     public static bool IsActive(RequestStatus status) => Active.Contains(status);

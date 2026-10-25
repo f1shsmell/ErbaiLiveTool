@@ -1,4 +1,6 @@
+﻿using System.IO;
 using System.Runtime.Loader;
+using System.Threading;
 using Erbai.Contracts.Logging;
 using Erbai.Contracts.Plugins;
 using Erbai.Core.Hosting;
@@ -535,6 +537,22 @@ public sealed class PluginLoader : IAsyncDisposable
         return true;
     }
 
+    /// <summary>读插件 DLL 字节（共享读；短暂重试穿过杀软对新落盘 DLL 的独占扫描窗）。</summary>
+    private static byte[] ReadPluginBytes(string dllPath)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return File.ReadAllBytes(dllPath);
+            }
+            catch (IOException) when (attempt < 10)
+            {
+                Thread.Sleep(200);
+            }
+        }
+    }
+
     /// <summary>
     /// 建 ALC 加载主 DLL → 发现实现三类接口的 public 非抽象类型 → 逐类型实例化并注册。
     /// 同目录多个类型均可注册（共享同一 ALC；最后一个类型卸载时回收 ALC）。
@@ -545,7 +563,12 @@ public sealed class PluginLoader : IAsyncDisposable
         var dllPath = Path.Combine(pluginDir, manifest.File);
         var alc = new PluginLoadContext(pluginDir);
         var entry = new CatalogEntry(manifest) { Alc = alc, WeakRef = new WeakReference(alc) };
-        var assembly = alc.LoadFromAssemblyPath(Path.Combine(dllPath));
+        // 字节流加载（2026-10 长稳轮）：LoadFromAssemblyPath 会对 DLL 文件保持内存映射，
+        // ALC.Unload 后映射的释放是异步的——快速"热禁用→热启用"同一插件时新的
+        // LoadFrom 撞上旧映射报 0x80070020（另一个程序正在使用此文件；测试实测
+        // 复现，生产热切换同样可能命中）。读入字节后 LoadFromStream 不留任何
+        // 文件句柄，Unload 只剩纯内存回收。插件不依赖 Assembly.Location（已核查）。
+        var assembly = alc.LoadFromStream(new MemoryStream(ReadPluginBytes(dllPath)));
 
         var discovered = 0;
         try

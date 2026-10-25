@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -34,15 +34,16 @@ internal sealed record OverlayHubEnvelope(string Channel, JsonElement Payload, D
 /// </summary>
 public sealed class OverlayServer : IOverlayHub, IAsyncDisposable
 {
-    private readonly AppConfig _config;
+    private readonly int _basePort;
     private readonly IEventBus _eventBus;
     private readonly CancellationTokenSource _serverCts = new();
     private WebApplication? _app;
     private int _boundPort;
 
+    /// <summary>UI 端口从配置取（必要 性审查后 Overlay 主题等死配置段已移除；服务器只关心端口）。</summary>
     public OverlayServer(AppConfig config, IEventBus eventBus)
     {
-        _config = config;
+        _basePort = Math.Clamp(config.Ui.Port, 1, 65535);
         _eventBus = eventBus;
     }
 
@@ -51,7 +52,7 @@ public sealed class OverlayServer : IOverlayHub, IAsyncDisposable
     /// <summary>启动（端口上探 20 个）；失败抛异常由组合根处理。</summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
-        var basePort = Math.Clamp(_config.Ui.Port, 1, 65535);
+        var basePort = _basePort;
         Exception? lastError = null;
         for (var attempt = 0; attempt < 20; attempt++)
         {
@@ -101,17 +102,9 @@ public sealed class OverlayServer : IOverlayHub, IAsyncDisposable
         app.MapGet("/overlay/queue", () => Results.Content(QueueOverlayHtml, "text/html; charset=utf-8"));
         app.MapGet("/overlay/queueup", () => Results.Content(QueueUpOverlayHtml, "text/html; charset=utf-8"));
         app.MapGet("/overlay/danmaku", () => Results.Content(DanmakuOverlayHtml, "text/html; charset=utf-8"));
-        app.MapGet("/api/v1/overlay/config", () => Results.Json(OverlayConfigJson()));
-
         app.MapGet("/api/v1/queue", () => Results.Json(LastSnapshot));
 
         app.MapGet("/api/v1/queueup", () => Results.Json(LastQueueUpSnapshot));
-
-        app.MapGet("/api/v1/overlay/lyric", () =>
-        {
-            // MVP：歌词服务（lxmusic /lyric 代理）阶段 2 后接入，先返回空歌词
-            return Results.Json(new { lines = Array.Empty<object>(), metadata = new { } });
-        });
 
         app.Map("/api/v1/events", async (HttpContext context) =>
         {
@@ -248,6 +241,11 @@ public sealed class OverlayServer : IOverlayHub, IAsyncDisposable
             catch
             {
             }
+
+            // 会话结束回收发送锁条目：TrySendAsync 仅在"发送时发现 socket 已非
+            // Open"时自清，慢客户端超时后静默断开（无后续发送）的条目会永远
+            // 滞留——长播场景下随断连次数无界增长
+            _sendLocks.TryRemove(socket, out _);
         }
     }
 
@@ -466,16 +464,6 @@ public sealed class OverlayServer : IOverlayHub, IAsyncDisposable
             DateTimeOffset.UtcNow));
         return Task.CompletedTask;
     }
-
-    private object OverlayConfigJson() => new
-    {
-        theme = _config.Overlay.Theme,
-        customCss = _config.Overlay.CustomCss,
-        showCurrent = _config.Overlay.ShowCurrent,
-        showQueue = _config.Overlay.ShowQueue,
-        showLyric = _config.Overlay.ShowLyric,
-        transparent = _config.Overlay.Transparent,
-    };
 
     public async ValueTask DisposeAsync()
     {

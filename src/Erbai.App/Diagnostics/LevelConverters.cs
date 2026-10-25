@@ -4,7 +4,7 @@ using Windows.UI;
 
 namespace Erbai.App.Diagnostics;
 
-/// <summary>诊断级别 → 徽标背景色。</summary>
+/// <summary>诊断级别 → 徽标背景色（饱和色底，深浅主题通用）。</summary>
 public sealed class LevelToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
@@ -17,6 +17,22 @@ public sealed class LevelToBrushConverter : IValueConverter
                 _ => Color.FromArgb(0xFF, 0xC6, 0x28, 0x28),
             })
             : new SolidColorBrush(Color.FromArgb(0xFF, 0x60, 0x60, 0x60));
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>诊断级别 → 徽标文字色（2026-10：WARN 琥珀底白字对比度不足，改深色字；
+/// OK/FAIL 深绿/深红底保持白字）。</summary>
+public sealed class LevelToForegroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var warn = value is DiagnosticLevel level && level == DiagnosticLevel.Warn;
+        return new SolidColorBrush(warn
+            ? Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)
+            : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language) =>

@@ -1,4 +1,6 @@
 using Erbai.Contracts.Live;
+using Erbai.Contracts.Logging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 
 namespace Erbai.App.Views;
@@ -74,23 +76,54 @@ internal static class LiveEventFormat
     };
 
     /// <summary>
-    /// 浅色背景事件色板（日志页与概览卡片共用；深色文字在白底上可读）。
-    /// 旧 <see cref="ColorFor"/> 面向深色悬浮窗底色（弹幕=白字），概览卡片是浅底，
-    /// 白字在浅底上看不见——"概览实时事件空白"的根因，改用浅色板。
+    /// 主题感知事件色板（2026-10 UI 轮）：按页面当前主题取色——旧 <c>LightColorFor</c>
+    /// 固定浅色系深色文字，系统深色主题下深灰/深藏青文字在深底上几乎不可见
+    /// （弹幕=#37474F 是重灾区）。深色系用 Material 200/300 亮色调（深底可读），
+    /// 浅色系保持原 800/900 深色调（白底可读）。行对象随重建刷新，切主题
+    /// （跟随系统重启应用）后下一次渲染即取到新色。
     /// </summary>
-    public static Brush LightColorFor(LiveEvent evt) => evt.Kind switch
-    {
-        LiveEventKind.Danmaku => Solid("#37474F"),
-        LiveEventKind.Gift => Solid("#B71C1C"),
-        LiveEventKind.GuardBuy => Solid("#B4530A"),
-        LiveEventKind.Enter => Solid("#1B5E20"),
-        LiveEventKind.Follow => Solid("#0D47A1"),
-        LiveEventKind.Subscribe => evt.Platform == "douyin" ? Solid("#4A148C") : Solid("#0D47A1"),
-        LiveEventKind.Share => Solid("#2E7D32"),
-        LiveEventKind.Like => Solid("#AD1457"),
-        LiveEventKind.LiveState => Solid("#6A1B9A"),
-        _ => Solid("#37474F"),
-    };
+    public static Brush EventColorFor(LiveEvent evt, ElementTheme theme) => theme == ElementTheme.Dark
+        ? evt.Kind switch
+        {
+            LiveEventKind.Danmaku => Solid("#C3CFD9"),
+            LiveEventKind.Gift => Solid("#FF8A80"),
+            LiveEventKind.GuardBuy => Solid("#FFB74D"),
+            LiveEventKind.Enter => Solid("#A5D6A7"),
+            LiveEventKind.Follow => Solid("#90CAF9"),
+            LiveEventKind.Subscribe => evt.Platform == "douyin" ? Solid("#CE93D8") : Solid("#90CAF9"),
+            LiveEventKind.Share => Solid("#B2DFDB"),
+            LiveEventKind.Like => Solid("#F48FB1"),
+            LiveEventKind.LiveState => Solid("#B39DDB"),
+            _ => Solid("#C3CFD9"),
+        }
+        : evt.Kind switch
+        {
+            LiveEventKind.Danmaku => Solid("#37474F"),
+            LiveEventKind.Gift => Solid("#B71C1C"),
+            LiveEventKind.GuardBuy => Solid("#B4530A"),
+            LiveEventKind.Enter => Solid("#1B5E20"),
+            LiveEventKind.Follow => Solid("#0D47A1"),
+            LiveEventKind.Subscribe => evt.Platform == "douyin" ? Solid("#4A148C") : Solid("#0D47A1"),
+            LiveEventKind.Share => Solid("#2E7D32"),
+            LiveEventKind.Like => Solid("#AD1457"),
+            LiveEventKind.LiveState => Solid("#6A1B9A"),
+            _ => Solid("#37474F"),
+        };
+
+    /// <summary>系统/工具行文字色（主题感知：错误红、警告琥珀、普通次级灰）。</summary>
+    public static Brush LogLevelColorFor(LogLevel level, ElementTheme theme) => theme == ElementTheme.Dark
+        ? level switch
+        {
+            LogLevel.Error or LogLevel.Fatal => Solid("#FF8A80"),
+            LogLevel.Warning => Solid("#FFB74D"),
+            _ => Solid("#B8C4CC"),
+        }
+        : level switch
+        {
+            LogLevel.Error or LogLevel.Fatal => Solid("#C62828"),
+            LogLevel.Warning => Solid("#B26A00"),
+            _ => Solid("#616161"),
+        };
 
     private static Brush Solid(string hex) =>
         new SolidColorBrush(Windows.UI.Color.FromArgb(255,

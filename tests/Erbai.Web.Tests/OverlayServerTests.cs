@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -24,7 +24,6 @@ public class OverlayServerTests
             Ui = new UiConfig
             {
                 Port = port ?? Random.Shared.Next(21000, 28000), // 测试并行互不冲突
-                Host = "127.0.0.1",
             },
         };
 
@@ -49,27 +48,6 @@ public class OverlayServerTests
         await server.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
-    [Fact]
-    public async Task OverlayConfig_Public_ReturnsFields()
-    {
-        var (server, bus, baseUrl) = await StartAsync(Config());
-        using var client = new HttpClient();
-
-        var body = await client.GetStringAsync($"{baseUrl}/api/v1/overlay/config");
-        using var doc = JsonDocument.Parse(body);
-        Assert.Equal("clash", doc.RootElement.GetProperty("theme").GetString());
-        Assert.True(doc.RootElement.GetProperty("showQueue").GetBoolean());
-
-        // 页面
-        var html = await client.GetStringAsync($"{baseUrl}/overlay");
-        Assert.Contains("点歌 Overlay", html);
-        Assert.Contains("/api/v1/events", html);
-        // 空状态/错误提示（2026-09：空白可诊断——空队列显示占位、token 缺失显示错误）
-        Assert.Contains("等待点歌", html);
-        Assert.Contains("Overlay 连接失败", html);
-
-        await server.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
-    }
 
     [Fact]
     public async Task OverlayWindowPages_AllServed()
@@ -107,7 +85,6 @@ public class OverlayServerTests
 
         Assert.Equal(port + 1, server.BoundPort); // 逐级上探
         using var client = new HttpClient();
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"{baseUrl}/api/v1/overlay/config")).StatusCode);
 
         await server.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
         blocker.Stop();

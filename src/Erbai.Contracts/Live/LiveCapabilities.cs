@@ -1,4 +1,4 @@
-namespace Erbai.Contracts.Live;
+﻿namespace Erbai.Contracts.Live;
 
 /// <summary>直播平台插件能力（加性能力协商：宿主可忽略不认识的位）。</summary>
 [Flags]
@@ -22,7 +22,6 @@ public enum LiveCapabilities
     Follow = 1 << 4,
 
     /// <summary>订阅。</summary>
-    Subscribe = 1 << 5,
 
     /// <summary>点赞。</summary>
     Like = 1 << 6,

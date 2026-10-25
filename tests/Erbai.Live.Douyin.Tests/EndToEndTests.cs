@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Live;
 using Erbai.Contracts.Queue;
@@ -128,10 +128,8 @@ public class EndToEndTests
         var settings = AppConfig.CreateDefault();
         var queue = new SongQueueService(store, bus, settings);
         var commands = new SongRequestService(queue, store, logs, new SongBlacklist(store, logs));
-        var users = new Erbai.Modules.SongRequest.Services.UserService(store);
-
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var userSyncTask = Erbai.Live.Douyin.Services.DouyinUserSync.RunAsync(bus, users, logs, cts.Token);
+        var userSyncTask = Erbai.Live.Douyin.Services.DouyinUserSync.RunAsync(bus, store, logs, cts.Token);
 
         // 粉丝团事件（Type=7）经 EventBus → DouyinUserSync 持久化等级
         bus.Publish(new LiveEvent

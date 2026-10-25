@@ -1,9 +1,9 @@
-using System.Text.Json;
+﻿using System.Text.Json;
+using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Live;
 using Erbai.Core.Storage;
 using Erbai.Live.Douyin.Messages;
 using Erbai.Live.Douyin.Services;
-using Erbai.Modules.SongRequest.Services;
 
 namespace Erbai.Live.Douyin.Tests;
 
@@ -12,13 +12,13 @@ public class DouyinUserSyncTests : IAsyncLifetime
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"douyin-usersync-{Guid.NewGuid():N}.db");
     private SqliteStorageEngine _store = null!;
-    private UserService _users = null!;
+    private IStorageEngine _users = null!;
 
     public async Task InitializeAsync()
     {
         _store = new SqliteStorageEngine(_dbPath);
         await _store.OpenAsync();
-        _users = new UserService(_store);
+        _users = _store;
     }
 
     public async Task DisposeAsync()

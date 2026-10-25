@@ -1,4 +1,4 @@
-using Erbai.Contracts.Requests;
+﻿using Erbai.Contracts.Requests;
 
 namespace Erbai.Core.Tests;
 
@@ -27,7 +27,6 @@ public class RequestStateMachineTests
     [InlineData(RequestStatus.Dispatched, RequestStatus.Cancelled)]
     [InlineData(RequestStatus.Dispatched, RequestStatus.Queued)]
     [InlineData(RequestStatus.Dispatched, RequestStatus.Failed)]
-    [InlineData(RequestStatus.Dispatched, RequestStatus.RecoveryRequired)]
     public void AllowedTransitions_AreLegal(RequestStatus from, RequestStatus to)
     {
         Assert.True(RequestStateMachine.CanTransition(from, to), $"{from} -> {to} 应合法");
@@ -47,7 +46,6 @@ public class RequestStateMachineTests
     [InlineData(RequestStatus.Cancelled, RequestStatus.Queued)]
     [InlineData(RequestStatus.Failed, RequestStatus.Queued)]
     [InlineData(RequestStatus.Rejected, RequestStatus.Queued)]
-    [InlineData(RequestStatus.RecoveryRequired, RequestStatus.Queued)]
     public void IllegalTransitions_AreRejected(RequestStatus from, RequestStatus to)
     {
         Assert.False(RequestStateMachine.CanTransition(from, to), $"{from} -> {to} 应非法");
@@ -64,7 +62,6 @@ public class RequestStateMachineTests
     [InlineData(RequestStatus.Skipped)]
     [InlineData(RequestStatus.Cancelled)]
     [InlineData(RequestStatus.Failed)]
-    [InlineData(RequestStatus.RecoveryRequired)]
     public void SameStatus_AlwaysAllowed(RequestStatus status)
     {
         Assert.True(RequestStateMachine.CanTransition(status, status));

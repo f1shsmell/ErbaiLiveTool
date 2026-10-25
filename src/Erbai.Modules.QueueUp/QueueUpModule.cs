@@ -147,8 +147,12 @@ public sealed class QueueUpModule : IFeatureModule, IQueueUpModule
 
             case QueueUpCommandKind.Complete:
             {
-                // 「完成」为管理命令：仅 admin/anchor 可执行；普通观众静默忽略
-                if (evt.IsAdmin != true && evt.IsAnchor != true)
+                // 「完成」为管理命令：仅 admin/anchor 可执行；普通观众静默忽略。
+                // 特权判定与点歌切歌一致（docs/03 §2）：弹幕事件标志缺失时回落
+                // 持久化用户（「设置管理员@XX」只写 users 表，平台弹幕永远不会为
+                // 它打 admin 标；跨房间 MAX 合并由存储层负责）——否则主播在应用内
+                // 配的管理员无法用「完成」推进队首。
+                if (!await HasOperatorPrivilegeAsync(evt, ct))
                 {
                     return;
                 }
@@ -207,4 +211,25 @@ public sealed class QueueUpModule : IFeatureModule, IQueueUpModule
 
     /// <summary>跨平台用户标识复合键（B站/抖音同 id 不互相覆盖/取消）。</summary>
     private static string CompositeUserId(LiveEvent evt) => $"{evt.Platform}:{evt.RoomId}:{evt.UserId}";
+
+    /// <summary>
+    /// 管理特权判定：事件标志（平台打标）优先，缺失时回落持久化用户
+    /// （跨房间 MAX 合并）。与点歌切歌的判定语义一致。
+    /// </summary>
+    private async Task<bool> HasOperatorPrivilegeAsync(LiveEvent evt, CancellationToken ct)
+    {
+        if (evt.IsAdmin == true || evt.IsAnchor == true)
+        {
+            return true;
+        }
+
+        if (evt.UserId == 0)
+        {
+            // 匿名 uid：没有可回落的持久化身份
+            return false;
+        }
+
+        var (admin, anchor) = await Storage.GetUserPrivilegeAsync(evt.Platform, evt.UserId.ToString(), ct);
+        return admin || anchor;
+    }
 }

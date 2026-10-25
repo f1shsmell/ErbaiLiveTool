@@ -1,10 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Live;
 using Erbai.Contracts.Logging;
+using Erbai.Contracts.Storage;
 using Erbai.Core.Hosting;
 using Erbai.Live.Douyin.Messages;
-using Erbai.Modules.SongRequest.Services;
 
 namespace Erbai.Live.Douyin.Services;
 
@@ -13,7 +13,7 @@ namespace Erbai.Live.Douyin.Services;
 /// - 粉丝团等级 LRU 缓存 5000（普通弹幕缺等级时补查，防长播无限增长）；
 /// - 信号量 50 限流并发持久化（粉丝团事件洪泛不撑爆 DB 线程）；
 /// - 显式标志精细语义：管理员/主播 flag 只有携带真值才覆盖持久化特权
-///   （普通消息绝不降级已持久化 admin/anchor；UserService.MergeDouyinUserFlags 兜底）；
+///   （普通消息绝不降级已持久化 admin/anchor，见 <see cref="MergeFlags"/>）；
 /// - 粉丝团（Subscribe）事件只更新等级，不产生点歌（旧 handle_danmaku 语义）。
 /// 消费 EventBus 上的 LiveEvent（Platform == "douyin"），插件保持纯净。
 /// </summary>
@@ -23,7 +23,7 @@ public static class DouyinUserSync
     private const int PersistConcurrency = 50;
 
     /// <summary>启动同步循环（组合根调用；ct 取消即停）。</summary>
-    public static Task RunAsync(IEventBus bus, UserService users, ILogBus logs, CancellationToken ct) =>
+    public static Task RunAsync(IEventBus bus, IStorageEngine users, ILogBus logs, CancellationToken ct) =>
         ModuleLoops.RunConsumerLoopAsync(
             bus.Subscribe<LiveEvent>(capacity: 256),
             (evt, loopCt) =>
@@ -40,7 +40,7 @@ public static class DouyinUserSync
             ct);
 
     /// <summary>处理单条抖音事件（LRU + 持久化；测试可直调）。</summary>
-    public static async Task HandleAsync(UserService users, LiveEvent evt, CancellationToken ct = default)
+    public static async Task HandleAsync(IStorageEngine users, LiveEvent evt, CancellationToken ct = default)
     {
         var roomId = evt.RoomId ?? "";
         var userId = evt.UserId.ToString();
@@ -109,7 +109,7 @@ public static class DouyinUserSync
     private static readonly SemaphoreSlim _persistGate = new(PersistConcurrency, PersistConcurrency);
 
     private static async Task SaveWithSemaphoreAsync(
-        UserService users,
+        IStorageEngine store,
         string roomId,
         string userId,
         string nickname,
@@ -128,14 +128,51 @@ public static class DouyinUserSync
         await _persistGate.WaitAsync(ct);
         try
         {
-            await users.SaveDouyinUserAsync(
-                roomId, userId, nickname, fanLevel, isAdmin, isAnchor,
-                hasExplicitAdminFlag, hasExplicitAnchorFlag, ct);
+            var stored = await store.GetUserAsync("douyin", roomId, userId, ct);
+            var (effectiveAdmin, effectiveAnchor) = MergeFlags(
+                stored, isAdmin, isAnchor, hasExplicitAdminFlag, hasExplicitAnchorFlag);
+            await store.SaveUserAsync(new User
+            {
+                Platform = "douyin",
+                RoomId = roomId,
+                UserId = userId,
+                Nickname = nickname,
+                IsAdmin = effectiveAdmin,
+                IsAnchor = effectiveAnchor,
+                FanLevel = fanLevel,
+            }, ct: ct);
         }
         finally
         {
             _persistGate.Release();
         }
+    }
+
+    /// <summary>
+    /// 抖音消息特权合并：显式标志才覆盖存储值（普通消息绝不降级已持久化的
+    /// admin/anchor）。原为 SongRequest.UserService 成员——依赖方向应为
+    /// 平台自持（2026-10 精简轮切断 平台→点歌模块 引用）。
+    /// </summary>
+    public static (bool IsAdmin, bool IsAnchor) MergeFlags(
+        User? stored,
+        bool messageIsAdmin,
+        bool messageIsAnchor,
+        bool hasExplicitAdminFlag,
+        bool hasExplicitAnchorFlag)
+    {
+        var effectiveAdmin = messageIsAdmin;
+        if (stored is not null && !hasExplicitAdminFlag)
+        {
+            effectiveAdmin = effectiveAdmin || stored.IsAdmin;
+        }
+
+        var effectiveAnchor = messageIsAnchor;
+        if (stored is not null && !hasExplicitAnchorFlag)
+        {
+            effectiveAnchor = effectiveAnchor || stored.IsAnchor;
+        }
+
+        return (effectiveAdmin, effectiveAnchor);
     }
 
     /// <summary>从原始报文重算"显式标志"（FlagIsExplicit 语义，旧 handle_danmaku 平移）。

@@ -20,7 +20,7 @@ public class BilibiliLivePluginTests
         """{"cmd":"DANMU_MSG","info":[[0,25,16777215,0,1700000000,0,0,0,0,0,0,0,0,0,0,{}],"点歌 晴天 - 周杰伦",[123456,"爱上一只猫",0,0,0,10000,1,""],[5,"粉丝牌","房主",5050,0,0],[30,0,5805050,">50000"],0,0,0,0,0,0,0,[1]]}""";
 
     private static (FakeBiliWsServer Ws, FakeBiliHttpHandler Http, BilibiliLivePlugin Plugin) CreateAsync(
-        TimeSpan? heartbeatInterval = null)
+        TimeSpan? heartbeatInterval = null, TimeSpan? readIdleTimeout = null)
     {
         var ws = new FakeBiliWsServer();
         var http = new FakeBiliHttpHandler(ws.Port);
@@ -30,7 +30,8 @@ public class BilibiliLivePluginTests
             new LogBus(),
             reconnectDelay: TimeSpan.FromMilliseconds(50),
             heartbeatInterval: heartbeatInterval,
-            wsUriFactory: (host, port) => new Uri($"ws://{host}:{port}/sub"));
+            wsUriFactory: (host, port) => new Uri($"ws://{host}:{port}/sub"),
+            readIdleTimeout: readIdleTimeout);
         return (ws, http, plugin);
     }
 

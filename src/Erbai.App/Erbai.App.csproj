@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- WinUI 3 主程序：组合根。发布配方照抄 FufuLauncher（docs/05 §1，验证过的组合：
        TFM 26100 + WASDK 2.2.0 + WinUIEx 2.9.1 + H.NotifyIcon 2.2.0）。 -->
   <PropertyGroup>

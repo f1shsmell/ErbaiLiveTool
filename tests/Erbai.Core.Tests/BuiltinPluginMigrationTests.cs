@@ -1,4 +1,4 @@
-using Erbai.Contracts.Abstractions;
+﻿using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Logging;
 using Erbai.Contracts.Plugins;
@@ -18,6 +18,9 @@ namespace Erbai.Core.Tests;
 /// 依赖经 ServiceResolver 构造注入（IStorageEngine/IEventBus/ILogBus/Func&lt;AppConfig&gt;），
 /// 主程序经 <c>IQueueUpModule</c> 接口访问——复刻 AppServices 迁移后行为。
 /// </summary>
+/// <summary>插件 ALC 加载类测试互斥串行（2026-10 长稳轮）：并行时相互的
+/// CollectGarbage/ALC 卸载会干扰对方正在进行的程序集加载（间歇性空注册）。</summary>
+[Collection("plugin-alc")]
 public class BuiltinPluginMigrationTests
 {
     [Fact]
