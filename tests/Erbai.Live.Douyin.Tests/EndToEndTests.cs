@@ -71,7 +71,14 @@ public class EndToEndTests
             }
         });
 
-        await Task.Delay(300); // 等 WS 握手
+        // 等 WS 握手完成再推送（原固定 300ms 在 CI 冷启动下不够，推送落空 → 全链路超时）
+        var connectDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (server.ConnectedCount == 0 && DateTime.UtcNow < connectDeadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.True(server.ConnectedCount > 0, "插件 10s 内未连上 fake WS 服务器");
 
         // fake WS 推送一条真实形态的弹幕点歌
         await server.PushAsync(Envelope(1, new

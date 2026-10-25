@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -27,6 +27,9 @@ internal sealed class FakeDouyinWsServer : IAsyncDisposable
     }
 
     public int Port { get; }
+
+    /// <summary>当前已连接客户端数（测试在 PushAsync 前轮询——慢环境固定延迟等不到握手）。</summary>
+    public int ConnectedCount => _clients.Count;
 
     /// <summary>已收到的客户端文本消息（帧 payload，含 {Type,Data} 命令等）。</summary>
     public IReadOnlyCollection<string> Received => _received;
