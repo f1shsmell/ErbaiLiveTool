@@ -11,8 +11,15 @@
 
 #define AppName "ErbaiLiveTool"
 #define AppDisplayName "二白直播工具"
+; 版本默认值仅兜底：实际版本由 ISCC /DAppVersion=/DAppVersionNum 注入
+;（tools/build-installer.ps1 从主程序 FileVersion 取）——脚本级 #define 会覆盖
+; 命令行 /D（ISPP 语义），曾导致 CI 恒产 Setup_v0.1.0.exe 而发布失败（2026-10）。
+#ifndef AppVersion
 #define AppVersion "0.1.0"
+#endif
+#ifndef AppVersionNum
 #define AppVersionNum "0.1.0"
+#endif
 #define AppPublisher "wxycs"
 #define AppExe "ErbaiLiveTool.exe"
 #define AppId "{{D1B2E44F-9A7C-4F3B-B8DE-1C6A5E209843}"
