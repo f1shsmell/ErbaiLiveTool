@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer + portable zip
+        shell: pwsh
+        env:
+          INNO_SETUP_HOME: 'C:\Program Files (x86)\Inno Setup 6'
+        run: powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1
+
+      - name: Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 产物（tools/build-installer.ps1）：installer\Output\ 下安装版 + 绿色版 zip
+          $tag = $env:GITHUB_REF_NAME
+          if ($env:GITHUB_REF_TYPE -ne "tag") { $tag = "v$((Get-Item publish\ErbaiLiveTool.exe).VersionInfo.FileVersion)" }
+          $assets = @(Get-ChildItem installer\Output\ErbaiLiveTool_Setup_*.exe, installer\Output\ErbaiLiveTool-*.zip |
+            Select-Object -ExpandProperty FullName)
+          gh release create "$tag" --title "ErbaiLiveTool $tag" --generate-notes @assets
