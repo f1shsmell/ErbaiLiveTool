@@ -1,4 +1,4 @@
-namespace Erbai.Contracts.Requests;
+﻿namespace Erbai.Contracts.Requests;
 
 /// <summary>
 /// 点歌请求状态流转表。
@@ -45,7 +45,6 @@ public static class RequestStateMachine
                 RequestStatus.Cancelled,
                 RequestStatus.Queued,
                 RequestStatus.Failed,
-                RequestStatus.RecoveryRequired,
             },
         };
 

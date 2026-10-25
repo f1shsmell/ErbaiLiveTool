@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.QueueUp;
 using Erbai.Contracts.Requests;
@@ -252,6 +252,91 @@ public sealed class SqliteStorageEngine : IStorageEngine
         }, ct);
     }
 
+    /// <summary>
+    /// 窗口内提交计数（点歌频率限制，docs/03 §1.2 检查序）：该
+    /// (platform, room_id, user_id) 自 since 起状态非 rejected 的请求行数。
+    /// 计入 failed（搜索也消耗资源），排除 rejected（被拒提交不重复惩罚）。
+    /// created_at 为固定宽 ISO-8601 文本，字典序即时间序。
+    /// </summary>
+    public Task<int> CountRecentRequestsAsync(
+        string platform, string roomId, string userId, DateTimeOffset since, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(platform) || string.IsNullOrEmpty(userId))
+        {
+            return Task.FromResult(0);
+        }
+
+        return ExecuteAsync(connection =>
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COUNT(*)
+                FROM song_requests
+                WHERE platform = $platform AND room_id = $room AND user_id = $user
+                  AND status != 'rejected' AND created_at >= $since
+                """;
+            command.Parameters.AddWithValue("$platform", platform);
+            command.Parameters.AddWithValue("$room", roomId ?? "");
+            command.Parameters.AddWithValue("$user", userId);
+            command.Parameters.AddWithValue("$since", FormatIso(since));
+            return Convert.ToInt32(command.ExecuteScalar());
+        }, ct);
+    }
+
+    /// <summary>
+    /// 历史数据保留清理（2026-10 长稳轮）：单事务内先删超期 queue_events，再删
+    /// 超期终态 song_requests——仍被未删事件引用的请求跳过（queue_events 对
+    /// song_requests 有外键，直接删请求会违反约束）。活动请求（含 queued/
+    /// searching/dispatched）永不清理。
+    /// </summary>
+    public Task<(int EventsDeleted, int RequestsDeleted)> PruneHistoryAsync(
+        DateTimeOffset cutoff, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                var cutoffIso = FormatIso(cutoff);
+                var terminal = RequestStatuses.Terminal.ToList();
+                var marks = string.Join(",", terminal.Select((_, i) => $"$t{i}"));
+
+                int eventsDeleted;
+                using (var eventsCommand = connection.CreateCommand())
+                {
+                    eventsCommand.CommandText = "DELETE FROM queue_events WHERE created_at < $cutoff";
+                    eventsCommand.Parameters.AddWithValue("$cutoff", cutoffIso);
+                    eventsDeleted = eventsCommand.ExecuteNonQuery();
+                }
+
+                int requestsDeleted;
+                using (var requestsCommand = connection.CreateCommand())
+                {
+                    requestsCommand.CommandText = $"""
+                        DELETE FROM song_requests
+                        WHERE created_at < $cutoff
+                          AND status IN ({marks})
+                          AND NOT EXISTS (SELECT 1 FROM queue_events WHERE queue_events.request_id = song_requests.id)
+                        """;
+                    requestsCommand.Parameters.AddWithValue("$cutoff", cutoffIso);
+                    var index = 0;
+                    foreach (var status in terminal)
+                    {
+                        requestsCommand.Parameters.AddWithValue($"$t{index++}", StatusToDb(status));
+                    }
+
+                    requestsDeleted = requestsCommand.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+                return (eventsDeleted, requestsDeleted);
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }, ct);
+
     // ---- 内部实现 ----
 
     private Task<T> ExecuteAsync<T>(Func<SqliteConnection, T> action, CancellationToken ct)
@@ -353,6 +438,9 @@ public sealed class SqliteStorageEngine : IStorageEngine
                 status TEXT NOT NULL DEFAULT 'queued',
                 created_at TEXT NOT NULL
             );
+            -- queueup 状态过滤（启动恢复/历史页按 status 查询；2026-10 长稳轮补建，
+            -- IF NOT EXISTS 对既有库下次打开自动补齐，无需迁移）
+            CREATE INDEX IF NOT EXISTS idx_queueup_status ON queueup_entries(status);
             """;
         await command.ExecuteNonQueryAsync(ct);
 

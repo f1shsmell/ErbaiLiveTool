@@ -1,4 +1,4 @@
-using System.Net.WebSockets;
+﻿using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Erbai.Contracts.Abstractions;
@@ -61,8 +61,7 @@ public class QueueUpOverlayE2ETests
         var logs = new LogBus();
         var config = AppConfig.CreateDefault() with
         {
-            Api = new ApiConfig(), // 2026-09：overlay token 已移除
-            Ui = new UiConfig { Port = Random.Shared.Next(21000, 28000), Host = "127.0.0.1" },
+            Ui = new UiConfig { Port = Random.Shared.Next(21000, 28000) },
             QueueUp = new QueueUpConfig
             {
                 Rules =

@@ -1,6 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- 360 实时防御锁 obj/refint 引用程序集写入（实测持续拒绝）→ 测试工程不需要 ref asm -->
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <IsPackable>false</IsPackable>
 
   </PropertyGroup>
@@ -13,5 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Erbai.Live.Douyin\Erbai.Live.Douyin.csproj" />
     <ProjectReference Include="..\..\src\Erbai.Live.Douyin.Grabber\Erbai.Live.Douyin.Grabber.csproj" />
+    <!-- 抖音 E2E（弹幕 → 点歌全链路）横跨验证：产品代码不依赖 SongRequest -->
+    <ProjectReference Include="..\..\src\Erbai.Modules.SongRequest\Erbai.Modules.SongRequest.csproj" />
   </ItemGroup>
 </Project>

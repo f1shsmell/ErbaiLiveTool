@@ -11,6 +11,41 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- ===== 品牌强调色（2026-10 UI 美化轮）=====
+                 与悬浮窗强调色（点歌/排队橙 #FF7B54、弹幕青）同源的品牌橙替换系统蓝：
+                 导航选中条/开关/主按钮/进度条/焦点框整体获得应用识别度。
+                 深浅主题共用同一套色阶；Dark1-3 供浅色主题上的文字/填充保对比度
+                 （AccentButtonStyle 浅色下取 Dark1 作按钮底），Light1-3 供深色主题取亮阶。 -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="SystemAccentColor">#FF7B54</Color>
+                    <Color x:Key="SystemAccentColorLight1">#FF9573</Color>
+                    <Color x:Key="SystemAccentColorLight2">#FFB091</Color>
+                    <Color x:Key="SystemAccentColorLight3">#FFD0BC</Color>
+                    <Color x:Key="SystemAccentColorDark1">#E8603A</Color>
+                    <Color x:Key="SystemAccentColorDark2">#D95A38</Color>
+                    <Color x:Key="SystemAccentColorDark3">#B34A2D</Color>
+                    <!-- 品牌点缀：页头图标章底/前景（低饱和橙章 + 深橙图标） -->
+                    <SolidColorBrush x:Key="BrandChipBackgroundBrush" Color="#1AE8603A" />
+                    <SolidColorBrush x:Key="BrandAccentBrush" Color="#E8603A" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Default">
+                    <Color x:Key="SystemAccentColor">#FF7B54</Color>
+                    <Color x:Key="SystemAccentColorLight1">#FF9573</Color>
+                    <Color x:Key="SystemAccentColorLight2">#FFB091</Color>
+                    <Color x:Key="SystemAccentColorLight3">#FFD0BC</Color>
+                    <Color x:Key="SystemAccentColorDark1">#E8603A</Color>
+                    <Color x:Key="SystemAccentColorDark2">#D95A38</Color>
+                    <Color x:Key="SystemAccentColorDark3">#B34A2D</Color>
+                    <!-- 深色主题：亮橙章 + 更亮的章底 -->
+                    <SolidColorBrush x:Key="BrandChipBackgroundBrush" Color="#29FFB091" />
+                    <SolidColorBrush x:Key="BrandAccentBrush" Color="#FFAB8A" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <!-- 高对比度：不注入品牌色，完全跟随系统高对比度配色 -->
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
             <!-- ===== 全局 UI 资源（主窗口 UI 改进，2026-08-27）===== -->
 
             <!-- 统一连接状态转换器（评审第一轮 #8；概览/插件/设置页共用） -->
@@ -92,6 +127,17 @@
             <Style x:Key="StatLabelTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Style>
+
+            <!-- Pivot 分区标题（管理/显示页）：18 SemiBold，替代默认小字 -->
+            <Style x:Key="AppPivotStyle" TargetType="Pivot">
+                <Setter Property="HeaderTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontSize="18" FontWeight="SemiBold" />
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- 空态主文案：居中标题行。 -->

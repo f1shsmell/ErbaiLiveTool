@@ -106,4 +106,80 @@ public class EventBusTests
         var last = await fast.Reader.ReadAsync();
         Assert.Equal(999, last.Value);
     }
+
+
+/// <summary>
+/// 丢弃可观测（2026-10 长稳轮）：通道将满时的写入计为丢弃，经 DropObserved
+/// 节流上报（30s/订阅一次）；不订阅该事件时零开销路径不受影响。
+/// </summary>
+public class EventBusDropTelemetryTests
+{
+    private sealed record DropEvent(int Value);
+
+    [Fact]
+    public void 满通道写入_触发丢弃上报()
+    {
+        var bus = new EventBus();
+        var reports = new List<(string Type, long Count)>();
+        bus.DropObserved += (t, c) => reports.Add((t, c));
+
+        using var sub = bus.Subscribe<DropEvent>(capacity: 2);
+        // 先消费掉前 2 条使通道空，再连发 5 条（容量 2 → 3 次丢弃）
+        bus.Publish(new DropEvent(0));
+        bus.Publish(new DropEvent(1));
+        bus.Publish(new DropEvent(2));
+        bus.Publish(new DropEvent(3));
+        bus.Publish(new DropEvent(4));
+
+        Assert.Contains(reports, r => r.Type == nameof(DropEvent) && r.Count >= 1);
+    }
+
+    [Fact]
+    public void 未满通道写入_不触发上报()
+    {
+        var bus = new EventBus();
+        var reported = 0;
+        bus.DropObserved += (_, _) => reported++;
+
+        using var sub = bus.Subscribe<DropEvent>(capacity: 10);
+        for (var i = 0; i < 5; i++)
+        {
+            bus.Publish(new DropEvent(i));
+        }
+
+        Assert.Equal(0, reported);
+    }
+
+    [Fact]
+    public void 节流窗内_合并为一次上报()
+    {
+        var bus = new EventBus();
+        var total = 0L;
+        bus.DropObserved += (_, c) => total += c;
+
+        using var sub = bus.Subscribe<DropEvent>(capacity: 1);
+        for (var i = 0; i < 50; i++)
+        {
+            bus.Publish(new DropEvent(i));
+        }
+
+        // 30s 节流窗内：只有第一次写入溢出被上报，其余计入但等下一窗
+        Assert.True(total is >= 1 and < 50, $"节流窗内上报次数应有界，实际合计 {total}");
+    }
+
+    [Fact]
+    public void 上报处理者抛异常_不影响发布()
+    {
+        var bus = new EventBus();
+        bus.DropObserved += (_, _) => throw new InvalidOperationException("观察者异常（测试注入）");
+
+        using var sub = bus.Subscribe<DropEvent>(capacity: 1);
+        for (var i = 0; i < 10; i++)
+        {
+            bus.Publish(new DropEvent(i)); // 不得抛出
+        }
+
+        Assert.True(sub.Reader.TryRead(out _));
+    }
+}
 }

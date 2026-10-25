@@ -1,8 +1,10 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Erbai.App.Views.AdminPage"
+    NavigationCacheMode="Enabled"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux"
     xmlns:storage="using:Erbai.Contracts.Storage"
     xmlns:views="using:Erbai.App.Views">
 
@@ -12,11 +14,13 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="管理" Style="{StaticResource PageTitleTextStyle}" />
+        <ux:PageHeader Icon="Admin" Title="管理"
+                       Subtitle="空闲歌单、歌曲黑名单、用户黑名单与管理员；改动立即写盘并热生效" />
 
-        <Pivot Grid.Row="1">
+        <Pivot Grid.Row="1" Style="{StaticResource AppPivotStyle}">
             <!-- 空闲歌单 -->
             <PivotItem Header="空闲歌单">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                 <StackPanel Spacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBox x:Name="IdleNameBox" PlaceholderText="歌名" Width="220" />
@@ -38,9 +42,9 @@
                                         <TextBlock Text="{x:Bind Singer}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                                        <Button Content="↑" Click="OnMoveIdleUp" />
-                                        <Button Content="↓" Click="OnMoveIdleDown" />
-                                        <Button Content="删除" Click="OnRemoveIdle" />
+                                        <Button Content="↑" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveIdleUp" />
+                                        <Button Content="↓" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveIdleDown" />
+                                        <Button Content="删除" Style="{StaticResource InlineActionButtonStyle}" Click="OnRemoveIdle" />
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -48,10 +52,12 @@
                     </ListView>
                     <TextBlock x:Name="IdleEmptyText" Text="空闲歌单为空——添加歌曲后，队列空时会自动轮播。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" />
                 </StackPanel>
+                </ScrollViewer>
             </PivotItem>
 
             <!-- 歌曲黑名单 -->
             <PivotItem Header="歌曲黑名单">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                 <StackPanel Spacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBox x:Name="SongBanBox" PlaceholderText="歌名或 *关键词" Width="280" />
@@ -68,19 +74,22 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{x:Bind}" />
-                                    <Button Grid.Column="1" Content="删除" Click="OnRemoveSongBan" />
+                                    <Button Grid.Column="1" Content="删除" Style="{StaticResource InlineActionButtonStyle}" Click="OnRemoveSongBan" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="SongBanEmptyText" Text="暂无黑名单规则——添加歌名或 *关键词 后，匹配的点歌会被拦截。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" />
                 </StackPanel>
+                </ScrollViewer>
             </PivotItem>
 
             <!-- 用户黑名单 -->
             <PivotItem Header="用户黑名单">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                 <StackPanel Spacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox x:Name="UserBanSearchBox" PlaceholderText="昵称关键词搜索用户" Width="220" />
+                        <TextBox x:Name="UserBanSearchBox" PlaceholderText="昵称关键词搜索用户" Width="220" KeyDown="OnSearchUsersForBanKeyDown" />
                         <Button Content="搜索" Click="OnSearchUsersForBan" />
                         <TextBlock x:Name="UserBanStatus" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                     </StackPanel>
@@ -95,6 +104,7 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="UserBanCandidatesEmptyText" Text="无匹配用户——输入昵称关键词后搜索；用户需先在直播间互动过（发过弹幕/礼物）才会入库。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" TextWrapping="Wrap" />
                     <Button Content="拉黑选中用户" Click="OnBanSelectedUser" />
                     <TextBlock Text="已拉黑用户（被拉黑者无法点歌，主播也可发「拉黑@昵称 / 取消拉黑@昵称」）" FontWeight="SemiBold" Margin="0,8,0,0" />
                     <ListView x:Name="UserBanList" MaxHeight="260">
@@ -110,19 +120,22 @@
                                         <TextBlock Text="{x:Bind Platform}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock Text="{x:Bind Reason}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="解除拉黑" Click="OnUnbanUser" />
+                                    <Button Grid.Column="1" Content="解除拉黑" Style="{StaticResource InlineActionButtonStyle}" Click="OnUnbanUser" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="UserBanEmptyText" Text="暂无被拉黑用户。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" />
                 </StackPanel>
+                </ScrollViewer>
             </PivotItem>
 
             <!-- 管理员 -->
             <PivotItem Header="管理员">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                 <StackPanel Spacing="8">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox x:Name="AdminSearchBox" PlaceholderText="昵称关键词（空=全部，管理员置顶）" Width="260" />
+                        <TextBox x:Name="AdminSearchBox" PlaceholderText="昵称关键词（空=全部，管理员置顶）" Width="260" KeyDown="OnSearchAdminsKeyDown" />
                         <Button Content="搜索" Click="OnSearchAdmins" />
                         <TextBlock x:Name="AdminStatus" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
                     </StackPanel>
@@ -141,12 +154,14 @@
                                         <TextBlock Text="{x:Bind RoomId}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         <TextBlock Text="{x:Bind Role}" Foreground="{ThemeResource SystemFillColorCautionBrush}" />
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="切换管理员" Click="OnToggleAdmin" />
+                                    <Button Grid.Column="1" Content="切换管理员" Style="{StaticResource InlineActionButtonStyle}" Click="OnToggleAdmin" />
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <TextBlock x:Name="AdminEmptyText" Text="暂无用户——直播间有互动后这里会出现用户列表，搜索昵称即可授权。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" TextWrapping="Wrap" />
                 </StackPanel>
+                </ScrollViewer>
             </PivotItem>
         </Pivot>
     </Grid>

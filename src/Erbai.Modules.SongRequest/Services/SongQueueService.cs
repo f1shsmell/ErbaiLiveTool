@@ -17,8 +17,8 @@ namespace Erbai.Modules.SongRequest.Services
 
 /// <summary>
 /// 点歌队列服务：提交流水线 / 终态操作 / 快照投影 / 事件广播。
-/// 检查顺序不可变（docs/03 §1.2）：用户黑名单 → 重复点歌 → 队满 → 单用户上限；
-/// 每条拒绝都持久化 rejected 记录 + 发 queue.rejected 事件。
+/// 检查顺序不可变（docs/03 §1.2）：用户黑名单 → 等级门槛 → 频率限制 → 重复点歌 →
+/// 队满 → 单用户上限；每条拒绝都持久化 rejected 记录 + 发 queue.rejected 事件。
 /// Worker 派发循环与空闲歌单见 Worker（同程序集），播放状态机里程碑 4 接入，
 /// 搜索处理器由组合根注入。
 /// </summary>
@@ -83,7 +83,7 @@ public sealed class SongQueueService
         {
             if (!_started)
             {
-                await StartAsync(ct);
+                await StartCoreAsync(ct);
             }
 
             var canonical = string.IsNullOrEmpty(request.CanonicalSongKey)
@@ -126,6 +126,23 @@ public sealed class SongQueueService
             if (!decision.Allowed)
             {
                 return await RejectAsync(request, decision, ct);
+            }
+
+            // 频率限制（防刷屏，2026-10）：窗口内有效提交（非 rejected）达到上限即拒。
+            // 放在重复点歌之前——刷屏者在触发搜索/落库前就被挡下。AdminBypass 开启时
+            // 管理员豁免（与等级门槛同语义）；被拒提交不计入窗口（不重复惩罚），
+            // 失败提交计入（搜索同样消耗资源）。
+            if (!string.IsNullOrEmpty(request.UserId) &&
+                !(Policy.AdminBypass && (request.IsAdmin || request.IsAnchor)))
+            {
+                var windowStart = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(Policy.RateLimitWindowSeconds);
+                var recent = await _store.CountRecentRequestsAsync(
+                    request.Platform, request.RoomId, request.UserId, windowStart, ct);
+                decision = Policy.CheckRateLimit(recent);
+                if (!decision.Allowed)
+                {
+                    return await RejectAsync(request, decision, ct);
+                }
             }
 
             // 重复点歌必须在单用户上限之前：已有一首在队的用户重复点同一首
@@ -447,6 +464,28 @@ public sealed class SongQueueService
     internal bool IsStarted => _started;
 
     public async Task StartAsync(CancellationToken ct = default)
+    {
+        if (_started)
+        {
+            return;
+        }
+
+        // 门闩串行化 + 双检（StartCoreAsync 内）：并发 StartAsync 各自创建 worker
+        // 会双倍消费队列、同一请求被派发两次。SubmitAsync 持闩内走 StartCoreAsync
+        //（SemaphoreSlim 不可重入，公共入口才抢闩）。
+        await _submitGate.WaitAsync(ct);
+        try
+        {
+            await StartCoreAsync(ct);
+        }
+        finally
+        {
+            _submitGate.Release();
+        }
+    }
+
+    /// <summary>启动核心（调用方必须已持 _submitGate 或处于单线程启动路径）。</summary>
+    private async Task StartCoreAsync(CancellationToken ct)
     {
         if (_started)
         {

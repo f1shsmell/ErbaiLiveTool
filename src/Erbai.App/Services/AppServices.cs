@@ -1,4 +1,4 @@
-using Erbai.Connectors.Management;
+﻿using Erbai.Connectors.Management;
 using Erbai.Connectors.Management.Catalog;
 using Erbai.Connectors.Management.Runtime;
 using Erbai.Contracts.Abstractions;
@@ -38,6 +38,9 @@ public sealed class AppServices : IAsyncDisposable
     private readonly ServiceProvider _provider;
     private readonly CancellationTokenSource _bridgeCts;
     private readonly LiveEventLogWriter? _liveLog;
+
+    /// <summary>历史数据保留清理循环的取消源（DisposeAsync 取消；2026-10 长稳轮）。</summary>
+    private CancellationTokenSource? _maintenanceCts;
     private ModuleContext? _moduleContext; // 插件热启用复用的运行时上下文（CreateAsync 启动序列填充）
     private ConnectorPlayerPlugin? _player;
     private IQueueUpModule? _queueUp;
@@ -46,8 +49,9 @@ public sealed class AppServices : IAsyncDisposable
         IQueueUpModule? queueUp, CancellationTokenSource bridgeCts, LiveEventLogWriter? liveLog,
         PlayerConnectorResolver connectorPlayerResolver, ConnectorMaintenance connectorMaintenance,
         ConnectorInstallLayout connectorLayout, ConnectorInstaller connectorInstaller,
-        ConnectorCatalogClient connectorCatalog)
+        ConnectorCatalogClient connectorCatalog, CancellationTokenSource? maintenanceCts = null)
     {
+        _maintenanceCts = maintenanceCts;
         _provider = provider;
         _player = player;
         _queueUp = queueUp;
@@ -201,8 +205,19 @@ public sealed class AppServices : IAsyncDisposable
             ? new LiveEventLogWriter(Path.Combine(baseDir, "logs"))
             : null;
         var bus = new EventBus();
+        // 丢弃可观测（2026-10 长稳轮）：慢消费者（页面卡住/消费者异常停摆）导致
+        // 的通道溢出丢弃不再静默——总线侧已节流（30s/订阅），此处落日志即可定位
+        bus.DropObserved += (typeName, count) =>
+            logs.Log(Erbai.Contracts.Logging.LogLevel.Warning,
+                $"[事件总线] {typeName} 订阅队列溢出，丢弃了 {count} 条事件（消费方处理过慢或已停止）");
         var storage = new SqliteStorageEngine(Path.Combine(baseDir, settings.Storage.DatabasePath));
         await storage.OpenAsync();
+
+        // 历史数据保留清理（2026-10 长稳轮）：启动即清一次，此后每 6 小时一次；
+        // retention_days=0 永久保留；失败只记日志。挂机数周不再积累无限增长的
+        // queue_events/终态请求（拖慢历史页与备份）。
+        var maintenanceCts = new CancellationTokenSource();
+        _ = Task.Run(() => MaintenancePruneLoopAsync(storage, config, logs, maintenanceCts.Token));
 
         // Web overlay（端口上探；失败不拖垮主程序）
         OverlayServer? overlay = null;
@@ -270,16 +285,27 @@ public sealed class AppServices : IAsyncDisposable
                     : current.DouyinGrabber.ExecutablePath,
                 AppSettings = current.DouyinGrabber.AppSettings,
                 WsPort = ParseWsPort(current.DouyinWsUrl),
-                ProxyPort = current.DouyinGrabber.AppSettings.GetValueOrDefault("proxyPort") is { } p &&
-                            int.TryParse(p.ToString(), out var proxyPort)
-                    ? proxyPort
-                    : 8827,
+                ProxyPort = ParseProxyPort(current.DouyinGrabber.AppSettings),
                 Logs = sp.GetRequiredService<ILogBus>(),
             });
         });
         services.AddSingleton(sp => new DouyinLivePlugin(
             sp.GetRequiredService<ILogBus>(),
-            allowedRoomIds: sp.GetRequiredService<ConfigStore>().Settings.DouyinRoomIds.ToHashSet(StringComparer.Ordinal)));
+            allowedRoomIds: sp.GetRequiredService<ConfigStore>().Settings.DouyinRoomIds.ToHashSet(StringComparer.Ordinal),
+            // Grabber 死亡自愈（2026-10 长稳轮）：直播中抓包器进程意外死亡时，插件
+            // 连不上本地 WS → 回调重拉。StartAsync 幂等：端口活着（外部/adopt）直接
+            // 复用，端口死了走完整拉起链（清残留代理 → 快照 → 拉起 → 端口探测）。
+            // 模式与 runner 启动路径一致，不区分 bundled/external。
+            reviver: async ct =>
+            {
+                var grabber = sp.GetRequiredService<DouyinGrabberHost>();
+                var status = await grabber.StartAsync(ct);
+                if (status.Error.Length > 0)
+                {
+                    sp.GetRequiredService<ILogBus>().Log(Erbai.Contracts.Logging.LogLevel.Warning,
+                        $"[抖音] 自愈拉起抓包器未成功（稍后再试）：{status.Error}");
+                }
+            }));
 
         // 功能模块宿主 + 目录式插件（依赖经 ALC 宿主优先共享解析；ServiceResolver 直通容器）
         services.AddSingleton<ModuleHost>();
@@ -392,7 +418,7 @@ public sealed class AppServices : IAsyncDisposable
         // 事件桥接（B站/抖音通用）+ 抖音用户持久化同步
         var bridgeCts = new CancellationTokenSource();
         _ = LiveEventBridge.RunAsync(bus, commands, logs, bridgeCts.Token);
-        _ = DouyinUserSync.RunAsync(bus, userService, logs, bridgeCts.Token);
+        _ = DouyinUserSync.RunAsync(bus, storage, logs, bridgeCts.Token);
 
         // 阶段 5 功能模块（排队 / 礼物特效）——目录式插件：
         // 由 PluginLoader 从 Plugins\queueup|giftfx\ 加载注册进 ModuleHost
@@ -458,27 +484,8 @@ public sealed class AppServices : IAsyncDisposable
         supervisor.RegisterRunner("bilibili", async ct =>
         {
             await bilibili.StartAsync(config.Settings, ct);
-            // 平台事件流 → EventBus 桥接（LiveEventBridge / 弹幕日志页都订阅 EventBus）。
-            // 必须在 StartAsync 之后读取 Events——StartAsync 会重建事件通道
-            var forward = ModuleLoops.RunConsumerLoopAsync(
-                bilibili.Events,
-                (evt, _) =>
-                {
-                    bus.Publish(evt);
-                    liveLog?.Write(evt); // 直播事件落盘（日志页回看）
-                    return Task.CompletedTask;
-                },
-                logs,
-                "bilibili.events",
-                ct);
-            try
-            {
-                await forward;
-            }
-            finally
-            {
-                await bilibili.StopAsync();
-            }
+            // 必须在 StartAsync 之后桥接事件流——StartAsync 会重建事件通道
+            await ForwardLiveEventsAsync(bilibili, "bilibili", bus, logs, liveLog, ct);
         });
         supervisor.RegisterRunner("douyin", async ct =>
         {
@@ -487,10 +494,7 @@ public sealed class AppServices : IAsyncDisposable
             grabberHost.UpdateConfig(
                 current.DouyinGrabber.AppSettings,
                 ParseWsPort(current.DouyinWsUrl),
-                current.DouyinGrabber.AppSettings.GetValueOrDefault("proxyPort") is { } p &&
-                int.TryParse(p.ToString(), out var proxyPort)
-                    ? proxyPort
-                    : 8827);
+                ParseProxyPort(current.DouyinGrabber.AppSettings));
             douyin.UpdateRoomFilter(current.DouyinRoomIds);
 
             var grabberStatus = await grabberHost.StartAsync(ct);
@@ -500,24 +504,12 @@ public sealed class AppServices : IAsyncDisposable
             }
 
             await douyin.StartAsync(current, ct);
-            var forward = ModuleLoops.RunConsumerLoopAsync(
-                douyin.Events,
-                (evt, _) =>
-                {
-                    bus.Publish(evt);
-                    liveLog?.Write(evt); // 直播事件落盘（日志页回看）
-                    return Task.CompletedTask;
-                },
-                logs,
-                "douyin.events",
-                ct);
             try
             {
-                await forward;
+                await ForwardLiveEventsAsync(douyin, "douyin", bus, logs, liveLog, ct);
             }
             finally
             {
-                await douyin.StopAsync();
                 await grabberHost.StopAsync();
             }
         });
@@ -560,7 +552,7 @@ public sealed class AppServices : IAsyncDisposable
             connectorResolver, connectorMaintenance,
             provider.GetRequiredService<ConnectorInstallLayout>(),
             provider.GetRequiredService<ConnectorInstaller>(),
-            provider.GetRequiredService<ConnectorCatalogClient>());
+            provider.GetRequiredService<ConnectorCatalogClient>(), maintenanceCts);
 
         // 连接器插件后台维护（30 分钟一轮）。刻意放在启动序列末尾、且首轮 dueTime = 周期：
         // 启动瞬间不联网、不与首窗抢磁盘与网络；此后每轮只在有"可自动应用的更新"时才下载。
@@ -594,6 +586,12 @@ public sealed class AppServices : IAsyncDisposable
             ["LX_USE_HTTP_CONTROL"] = player.Lxmusic.UseHttpControl ? "true" : "false",
         };
     }
+
+    /// <summary>抓包器代理端口（appSettings 白名单键 proxyPort；非法回落默认 8827）。</summary>
+    private static int ParseProxyPort(IReadOnlyDictionary<string, object> appSettings) =>
+        appSettings.GetValueOrDefault("proxyPort") is { } p && int.TryParse(p.ToString(), out var proxyPort)
+            ? proxyPort
+            : 8827;
 
     private static int ParseWsPort(string wsUrl)
     {
@@ -761,22 +759,103 @@ public sealed class AppServices : IAsyncDisposable
     /// 手动输入框明确支持「切歌」「设置管理员@XX」等管理命令（两处注释均写明）。
     /// 此前注入的上下文不带任何特权标志，手动输入「切歌」会被权限门一律拒掉
     /// （2026-09-18 用户实测「主播无法切歌」的本机路径）。
+    /// 平台/房间取当前配置（2026-10 修订）：旧实现硬编码 douyin/房间 1——手动测试
+    /// 的用户、特权、频率限制都会落到 douyin 名下（错误平台的管理员判定、
+    /// 频率限制窗口、日志归属），B站直播时注入完全不生效。
     /// </summary>
     public Task<bool> InjectDanmakuAsync(string text, string nickname = "测试观众")
     {
+        var settings = Config.Settings;
+        var platform = string.IsNullOrWhiteSpace(settings.Platform) ? "douyin" : settings.Platform.Trim();
         var ctx = new DanmakuContext
         {
             Text = text,
             Nickname = nickname,
-            Platform = "douyin",
-            RoomId = "1",
-            UserId = $"test-{Environment.TickCount64}",
+            Platform = platform,
+            RoomId = string.IsNullOrWhiteSpace(settings.RoomId) ? "1" : settings.RoomId.Trim(),
+            UserId = $"local-{Environment.TickCount64}",
             IsAnchor = true,
         };
         return Commands.HandleMessageAsync(ctx);
     }
 
     private int _disposed;
+
+    /// <summary>
+    /// 平台事件流 → EventBus 桥接（LiveEventBridge / 弹幕日志页都订阅 EventBus）
+    /// + 直播事件落盘；forward 结束（断开/停机）后停插件。两平台 runner 共用。
+    /// </summary>
+    private static async Task ForwardLiveEventsAsync(
+        ILivePlatformPlugin platform, string name, IEventBus bus, ILogBus logs, LiveEventLogWriter? liveLog,
+        CancellationToken ct)
+    {
+        var forward = ModuleLoops.RunConsumerLoopAsync(
+            platform.Events,
+            (evt, _) =>
+            {
+                bus.Publish(evt);
+                liveLog?.Write(evt);
+                return Task.CompletedTask;
+            },
+            logs,
+            $"{name}.events",
+            ct);
+        try
+        {
+            await forward;
+        }
+        finally
+        {
+            await platform.StopAsync();
+        }
+    }
+
+    /// <summary>
+    /// 历史数据保留清理循环：每轮读当前配置（热改 retention_days 立即生效），
+    /// &gt;0 才执行 PruneHistoryAsync；异常吞掉等下一轮（清理性任务不拖垮宿主）。
+    /// </summary>
+    private static async Task MaintenancePruneLoopAsync(
+        Erbai.Core.Storage.SqliteStorageEngine storage, Erbai.Core.Configuration.ConfigStore config,
+        ILogBus logs, CancellationToken ct)
+    {
+        const int intervalHours = 6;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                // 热读当前配置：设置页改 retention_days 下一轮立即生效
+                var days = config.Settings.Storage.RetentionDays;
+                if (days > 0)
+                {
+                    var cutoff = DateTimeOffset.UtcNow - TimeSpan.FromDays(days);
+                    var (eventsDeleted, requestsDeleted) = await storage.PruneHistoryAsync(cutoff, ct);
+                    if (eventsDeleted > 0 || requestsDeleted > 0)
+                    {
+                        logs.Log(Erbai.Contracts.Logging.LogLevel.Information,
+                            $"[存储] 保留清理（{days} 天）：删除 {eventsDeleted} 条审计事件、{requestsDeleted} 条终态请求");
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logs.Log(Erbai.Contracts.Logging.LogLevel.Warning, $"[存储] 保留清理失败（下一轮再试）：{ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromHours(intervalHours), ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
 
     public async ValueTask DisposeAsync()
     {
@@ -787,6 +866,7 @@ public sealed class AppServices : IAsyncDisposable
         }
 
         _bridgeCts.Cancel();
+        _maintenanceCts?.Cancel();
         _bridgeCts.Dispose();
 
         // 先停连接器后台维护：它会在后台发起下载/解压，必须在进程退出前停掉，

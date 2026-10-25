@@ -1,4 +1,4 @@
-namespace Erbai.Contracts.Configuration;
+﻿namespace Erbai.Contracts.Configuration;
 
 /// <summary>
 /// 应用配置树（强类型；已删：queue.duplicate_scope（无消费方的 quirk）、api.admin_token（决策 #6）。
@@ -6,8 +6,6 @@ namespace Erbai.Contracts.Configuration;
 /// </summary>
 public sealed record AppConfig
 {
-    public int ConfigVersion { get; init; } = 1;
-
     public string Platform { get; init; } = "douyin";
 
     public string RoomId { get; init; } = "";
@@ -34,14 +32,10 @@ public sealed record AppConfig
 
     public UiConfig Ui { get; init; } = new();
 
-    public OverlayConfig Overlay { get; init; } = new();
-
     /// <summary>独立悬浮窗治理（决策 #17）：每类一个透明悬浮窗，各自开关/置顶/穿透。</summary>
     public OverlayWindowsConfig OverlayWindows { get; init; } = new();
 
     public IdlePlaylistConfig IdlePlaylist { get; init; } = new();
-
-    public ApiConfig Api { get; init; } = new();
 
     public DouyinGrabberConfig DouyinGrabber { get; init; } = new();
 
@@ -88,11 +82,6 @@ public sealed record PlayerConfig
     /// <summary>lxmusic | netease | kugou | qqmusic | folia。</summary>
     public string Key { get; init; } = "lxmusic";
 
-    /// <summary>连接器目录（空 = 默认解析顺序，见 docs/04 §1.4）。</summary>
-    public string ConnectorDir { get; init; } = "";
-
-    public bool AutoStart { get; init; } = true;
-
     public LxMusicConfig Lxmusic { get; init; } = new();
 
     public string FoliaToken { get; init; } = "";
@@ -124,8 +113,6 @@ public sealed record SearchConfig
 
 public sealed record RuntimeConfig
 {
-    public bool AutoStartPlatforms { get; init; } = false;
-
     /// <summary>直播事件落盘（logs/erbai-live-YYYYMMDD.log，按天滚动；日志页回看依据）。
     /// 默认开：直播事件只走内存广播，页面没开就永远错过——落盘后事后打开日志页也能看到。</summary>
     public bool LiveEventLog { get; init; } = true;
@@ -148,43 +135,50 @@ public sealed record PermissionsConfig
 
     /// <summary>admin/anchor 绕过一切点歌限制。</summary>
     public bool AdminBypass { get; init; } = true;
+
+    /// <summary>
+    /// 点歌频率限制（防刷屏，2026-10）：单用户在时间窗口内最多提交 N 次有效点歌
+    ///（admin/anchor 与一切限制一致地被 AdminBypass 绕过）。被拒提交不计入窗口
+    ///（重复惩罚无意义），计入 failed（搜索同样消耗资源）。默认 3 次 / 10 分钟。
+    /// </summary>
+    public bool RateLimitEnabled { get; init; } = true;
+
+    /// <summary>频率窗口长度（秒，校验 10–86400）。</summary>
+    public int RateLimitWindowSeconds { get; init; } = 600;
+
+    /// <summary>窗口内最大有效提交次数（校验 1–100）。</summary>
+    public int RateLimitMaxRequests { get; init; } = 3;
 }
 
 public sealed record StorageConfig
 {
     /// <summary>数据库路径（相对路径由宿主解析到数据目录）。</summary>
     public string DatabasePath { get; init; } = "song_request.db";
+
+    /// <summary>
+    /// 历史数据保留天数（2026-10 长稳轮）：超期的终态点歌请求与审计事件定期清理，
+    /// 防止 queue_events/历史表长期直播后无限增长拖慢历史页与备份。0 = 永久保留
+    ///（校验 0-3650；活动中的请求永不清理）。
+    /// </summary>
+    public int RetentionDays { get; init; } = 14;
 }
 
 public sealed record UiConfig
 {
-    public bool Enabled { get; init; } = true;
-
-    /// <summary>只允许回环地址，归一化为 127.0.0.1（决策 #6：本地 HTTP 只服务 Overlay）。</summary>
-    public string Host { get; init; } = "127.0.0.1";
-
-    /// <summary>端口（校验 1-65535；被占逐级上探 20 个）。</summary>
+    /// <summary>端口（校验 1-65535；被占逐级上探 20 个）。本地 HTTP 只服务本机
+    /// Overlay（服务器硬绑定 127.0.0.1 回环）。</summary>
     public int Port { get; init; } = 19830;
 
-    public bool OpenBrowserOnStart { get; init; } = true;
+    // ---- 主窗口位置/尺寸记忆（2026-10 长稳轮）：退出时采集，下次启动复位。
+    // null = 从未记录（首次启动用默认 1120×720 居中）；坐标经屏幕边界钳制，
+    // 拔掉外接显示器后不会落在屏幕外。----
+    public int? WindowX { get; init; }
 
-    public bool OverlayEnabled { get; init; } = true;
-}
+    public int? WindowY { get; init; }
 
-public sealed record OverlayConfig
-{
-    /// <summary>clash | light。</summary>
-    public string Theme { get; init; } = "clash";
+    public int? WindowWidth { get; init; }
 
-    public string CustomCss { get; init; } = "";
-
-    public bool ShowCurrent { get; init; } = true;
-
-    public bool ShowQueue { get; init; } = true;
-
-    public bool ShowLyric { get; init; } = true;
-
-    public bool Transparent { get; init; } = false;
+    public int? WindowHeight { get; init; }
 }
 
 /// <summary>悬浮窗治理配置（决策 #17）：三类悬浮窗各自独立开关/置顶/穿透。
@@ -193,10 +187,10 @@ public sealed record OverlayConfig
 public sealed record OverlayWindowsConfig
 {
     /// <summary>点歌悬浮窗（正在播放 + 点歌队列，页面 /overlay/queue）。</summary>
-    public OverlayWindowItemConfig SongQueue { get; init; } = new() { Width = 267 };
+    public OverlayWindowItemConfig SongQueue { get; init; } = new();
 
     /// <summary>排队看板悬浮窗（页面 /overlay/queueup）。</summary>
-    public OverlayWindowItemConfig QueueUp { get; init; } = new() { Width = 267 };
+    public OverlayWindowItemConfig QueueUp { get; init; } = new();
 
     /// <summary>弹幕悬浮窗（页面 /overlay/danmaku）。</summary>
     public OverlayWindowItemConfig Danmaku { get; init; } = new();
@@ -213,22 +207,6 @@ public sealed record OverlayWindowItemConfig
 
     /// <summary>点击穿透（鼠标事件透传下层窗口；设置页可随时切换）。</summary>
     public bool ClickThrough { get; init; } = true;
-
-    /// <summary>
-    /// 悬浮窗宽度（逻辑像素）。<b>2026-09 起已弃用</b>：点歌/排队宽高全自适应（随内容实测），
-    /// 弹幕窗用内置默认宽 + 高度随活跃行数伸缩，均不再读本字段。
-    /// 保留仅为兼容既有 config.json 反序列化（旧配置里的 width/height 不报错、被忽略）。
-    /// </summary>
-    public int Width { get; init; } = 400;
-
-    /// <summary>悬浮窗高度（逻辑像素）。<b>2026-09 起已弃用</b>，理由同 <see cref="Width"/>。</summary>
-    public int Height { get; init; } = 260;
-
-    /// <summary>
-    /// 高度自适应开关。<b>2026-09 起已弃用</b>：宽高自适应已成为唯一行为（无开关），
-    /// 设置页也不再提供该开关。保留仅为兼容既有 config.json。
-    /// </summary>
-    public bool AutoHeight { get; init; } = true;
 
     /// <summary>
     /// 悬浮窗<b>右下角</b> X（屏幕坐标）；null = 未设置过 → 按类型默认摆放（屏幕右下错开）。
@@ -302,29 +280,9 @@ public sealed record IdlePlaylistConfig
     public int PlayInterval { get; init; } = 30;
 }
 
-public sealed record ApiConfig
-{
-    // 2026-09 修订（决策 #6 再修订）：移除 overlay token——服务器回环绑定 127.0.0.1 已隔离
-    // 外部网络；OBS 浏览器源为同机应用，URL 复制不带 token 导致页面 401 空白（用户实测）；
-    // 业界（bililive_dm 等弹幕姬/点歌机）本地 OBS 页面均无鉴权。诊断页随之移除 token 检查项。
-}
-
 public sealed record DouyinGrabberConfig
 {
-    /// <summary>bundled | external | disabled。</summary>
-    public string Mode { get; init; } = "bundled";
-
-    public bool AutoStart { get; init; } = true;
-
-    public bool AutoStop { get; init; } = false;
-
-    public bool AdoptExisting { get; init; } = true;
-
-    public bool StartOnLaunch { get; init; } = false;
-
     public string ExecutablePath { get; init; } = "";
-
-    public string ConfigPath { get; init; } = "";
 
     /// <summary>抓包器 appSettings 白名单（19 键，docs/03 §4）；未知键报错。</summary>
     public IReadOnlyDictionary<string, object> AppSettings { get; init; } = GrabberAppSettings.CreateDefault();

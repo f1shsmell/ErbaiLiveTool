@@ -1,4 +1,6 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Erbai.Contracts.Abstractions;
 using Erbai.Contracts.QueueUp;
 using Microsoft.UI.Xaml;
@@ -6,9 +8,45 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Erbai.App.Views;
 
-/// <summary>排队条目展示投影。</summary>
-public sealed record QueueUpDisplay(QueueUpItem Item)
+/// <summary>
+/// 排队条目展示投影。INPC 类（2026-10 UI 轮）：渲染走差量更新——同一条目原位
+/// 更新属性值（x:Bind OneWay 刷新），ListView 选中与滚动位置得以保留；
+/// record + Clear/Add 全量重建会在每次事件时丢选中、列表跳回顶部。
+/// </summary>
+public sealed class QueueUpDisplay : INotifyPropertyChanged
 {
+    private QueueUpItem _item;
+
+    public QueueUpDisplay(QueueUpItem item) => _item = item;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public QueueUpItem Item
+    {
+        get => _item;
+        private set
+        {
+            if (Equals(_item.Entry.Id, value.Entry.Id) &&
+                Equals(_item.Position, value.Position) &&
+                string.Equals(_item.Entry.Content, value.Entry.Content, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _item = value;
+            Raise(nameof(Item));
+            Raise(nameof(PositionText));
+            Raise(nameof(TitleText));
+            Raise(nameof(SubText));
+        }
+    }
+
+    /// <summary>事件驱动的原位更新入口。</summary>
+    public void Update(QueueUpItem item) => Item = item;
+
+    private void Raise([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     public string PositionText => $"{Item.Position}.";
 
     public string TitleText => $"{Item.Entry.Nickname}：{(Item.Entry.Content.Length > 0 ? Item.Entry.Content : "(占位)")}";
@@ -22,8 +60,7 @@ public sealed record QueueUpDisplay(QueueUpItem Item)
 public sealed partial class QueueUpPage : Page
 {
     private readonly ObservableCollection<QueueUpDisplay> _items = [];
-    private readonly System.Threading.CancellationTokenSource _cts = new();
-    private Subscription<QueueUpEventEnvelope>? _subscription;
+    private readonly List<IDisposable> _pumps = [];
 
     public QueueUpPage()
     {
@@ -32,41 +69,19 @@ public sealed partial class QueueUpPage : Page
         var services = App.Services;
         // 内置排队插件未加载（被禁用/缺失）时页面显示空队列与 0/0 计数，按钮操作静默忽略
         Render(services.QueueUp?.Service.Snapshot() ?? new QueueUpSnapshot());
-        // 页面卸载（导航离开）必须退订并取消循环——否则反复导航累积
-        // 僵尸循环渲染已卸载页面（🟡 阶段 5 修复；旧页面同款模式留阶段 6）
-        Unloaded += (_, _) =>
-        {
-            _cts.Cancel();
-            _subscription?.Dispose();
-            _subscription = null;
-        };
-        _subscription = services.Bus.Subscribe<QueueUpEventEnvelope>(capacity: 64);
-        var sub = _subscription;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var envelope in sub.Reader.ReadAllAsync(_cts.Token))
-                {
-                    if (envelope.Data.Snapshot is { } snapshot)
-                    {
-                        DispatcherQueue.TryEnqueue(() => Render(snapshot));
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        });
+        _pumps.Add(new Ux.ViewPump<QueueUpEventEnvelope>(services.Bus, DispatcherQueue, capacity: 64,
+            envelope => { if (envelope.Data.Snapshot is { } snapshot) Render(snapshot); }));
+        Unloaded += (_, _) => { foreach (var p in _pumps) p.Dispose(); _pumps.Clear(); };
     }
 
     private void Render(QueueUpSnapshot snapshot)
     {
-        _items.Clear();
-        foreach (var item in snapshot.Items)
-        {
-            _items.Add(new QueueUpDisplay(item));
-        }
+        // 差量更新（保选中/滚动；算法见 Ux.ObservableDiffer）
+        Ux.ObservableDiffer.Apply(_items, snapshot.Items,
+            i => i.Entry.Id,
+            d => d.Item.Entry.Id,
+            i => new QueueUpDisplay(i),
+            (existing, desired) => existing.Update(desired));
 
         CountText.Text = $"{snapshot.Total}";
         CountMaxText.Text = $"/ {snapshot.MaxEntries}";
@@ -83,10 +98,8 @@ public sealed partial class QueueUpPage : Page
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateButtons();
 
-    private static long? SelectedEntryId(Page page) =>
-        (page.FindName("QueueUpList") as ListView)?.SelectedItem is QueueUpDisplay display
-            ? display.Item.Entry.Id
-            : null;
+    private long? SelectedEntryId() =>
+        QueueUpList.SelectedItem is QueueUpDisplay display ? display.Item.Entry.Id : null;
 
     private async void OnCompleteNext(object sender, RoutedEventArgs e)
     {
@@ -100,7 +113,7 @@ public sealed partial class QueueUpPage : Page
 
     private async void OnCancelSelected(object sender, RoutedEventArgs e)
     {
-        if (SelectedEntryId(this) is { } id && App.Services.QueueUp is not null)
+        if (SelectedEntryId() is { } id && App.Services.QueueUp is not null)
         {
             await App.Services.QueueUp.Service.CancelEntryAsync(id);
         }

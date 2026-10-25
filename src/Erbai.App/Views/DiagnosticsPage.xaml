@@ -3,12 +3,14 @@
     x:Class="Erbai.App.Views.DiagnosticsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux"
     xmlns:diagnostics="using:Erbai.App.Diagnostics"
     xmlns:winui="using:Microsoft.UI.Xaml.Controls">
 
     <Page.Resources>
         <diagnostics:LevelToBrushConverter x:Key="LevelToBrush" />
         <diagnostics:LevelToTextConverter x:Key="LevelToText" />
+        <diagnostics:LevelToForegroundConverter x:Key="LevelToForeground" />
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="12">
@@ -18,7 +20,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="诊断" Style="{StaticResource PageTitleTextStyle}" />
+        <ux:PageHeader Icon="Repair" Title="诊断"
+                       Subtitle="运行环境、配置与连接的自检结果；导出报告不含敏感信息" />
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
             <Button x:Name="RefreshButton" Content="刷新" Click="OnRefresh" />
             <Button x:Name="ExportButton" Content="导出脱敏报告" Click="OnExport" />
@@ -37,7 +40,7 @@
                         <Border CornerRadius="8" Padding="8,2" VerticalAlignment="Center"
                                 Background="{x:Bind Level, Converter={StaticResource LevelToBrush}}">
                             <TextBlock Text="{x:Bind Level, Converter={StaticResource LevelToText}}"
-                                       FontSize="12" Foreground="White" />
+                                       FontSize="12" Foreground="{x:Bind Level, Converter={StaticResource LevelToForeground}}" />
                         </Border>
                         <TextBlock Grid.Column="1" Text="{x:Bind Name}" FontWeight="SemiBold"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />

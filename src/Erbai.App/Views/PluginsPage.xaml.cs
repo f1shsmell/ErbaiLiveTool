@@ -1041,7 +1041,8 @@ public sealed partial class PluginsPage : Page
 
         var versionError = new TextBlock
         {
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red),
+            // 主题感知错误色（2026-10）：硬编码 Red 在深色主题刺眼、浅色主题对比不足
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["SystemFillColorCriticalBrush"],
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Visibility = Visibility.Collapsed,

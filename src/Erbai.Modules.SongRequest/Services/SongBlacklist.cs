@@ -7,12 +7,16 @@ namespace Erbai.Modules.SongRequest.Services;
 /// 歌曲黑名单：
 /// 精确歌名 + `*关键词` 子串规则，casefold 匹配；持久化于 banned_songs 表，
 /// 管理界面热编辑——先写盘成功再更新内存，失败回滚内存。
+/// 写路径（Add/Remove/Load）经 <see cref="_ioGate"/> 串行化：三者都是
+/// 「读全量 → 全量替换」的存储写法，并发执行会互相覆盖（UI 编辑与弹幕
+/// 拉黑命令同时到达时丢规则）。
 /// </summary>
 public sealed class SongBlacklist
 {
     private readonly IStorageEngine _store;
     private readonly ILogBus _logs;
     private readonly object _lock = new();
+    private readonly SemaphoreSlim _ioGate = new(1, 1);
     private HashSet<string> _exact;
     private HashSet<string> _keywords;
 
@@ -25,6 +29,20 @@ public sealed class SongBlacklist
     }
 
     public async Task LoadAsync(CancellationToken ct = default)
+    {
+        // 与 Add/Remove 同一写闸门：启动加载（全量替换）不得覆盖并发中的编辑
+        await _ioGate.WaitAsync(ct);
+        try
+        {
+            await LoadCoreAsync(ct);
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
+    }
+
+    private async Task LoadCoreAsync(CancellationToken ct)
     {
         var rules = await _store.ListBannedSongsAsync(ct);
         var exact = new HashSet<string>(StringComparer.Ordinal);
@@ -123,25 +141,34 @@ public sealed class SongBlacklist
             }
         }
 
-        // 先持久化成功再更新内存（失败回滚内存 = 不更新）
-        var current = Items().ToList();
-        current.Add(normalized);
-        current.Sort(StringComparer.Ordinal);
-        await _store.ReplaceBannedSongsAsync(current, ct);
-
-        lock (_lock)
+        // 写路径串行化（读全量 → 全量替换不可并发，见类注释）
+        await _ioGate.WaitAsync(ct);
+        try
         {
-            if (keyword is not null)
-            {
-                _keywords.Add(keyword);
-            }
-            else
-            {
-                _exact.Add(normalized);
-            }
-        }
+            // 先持久化成功再更新内存（失败回滚内存 = 不更新）
+            var current = Items().ToList();
+            current.Add(normalized);
+            current.Sort(StringComparer.Ordinal);
+            await _store.ReplaceBannedSongsAsync(current, ct);
 
-        return true;
+            lock (_lock)
+            {
+                if (keyword is not null)
+                {
+                    _keywords.Add(keyword);
+                }
+                else
+                {
+                    _exact.Add(normalized);
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 
     /// <summary>移除规则；返回是否实际存在。先写盘成功再更新内存。</summary>
@@ -163,22 +190,30 @@ public sealed class SongBlacklist
             }
         }
 
-        var current = Items().ToList();
-        current.RemoveAll(item => string.Equals(item, normalized, StringComparison.Ordinal));
-        await _store.ReplaceBannedSongsAsync(current, ct);
-
-        lock (_lock)
+        await _ioGate.WaitAsync(ct);
+        try
         {
-            if (normalized.StartsWith("*", StringComparison.Ordinal))
-            {
-                _keywords.Remove(normalized[1..].Trim());
-            }
-            else
-            {
-                _exact.Remove(normalized);
-            }
-        }
+            var current = Items().ToList();
+            current.RemoveAll(item => string.Equals(item, normalized, StringComparison.Ordinal));
+            await _store.ReplaceBannedSongsAsync(current, ct);
 
-        return true;
+            lock (_lock)
+            {
+                if (normalized.StartsWith("*", StringComparison.Ordinal))
+                {
+                    _keywords.Remove(normalized[1..].Trim());
+                }
+                else
+                {
+                    _exact.Remove(normalized);
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 }

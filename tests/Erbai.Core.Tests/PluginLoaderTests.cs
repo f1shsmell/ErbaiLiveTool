@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Erbai.Contracts.Plugins;
 using Erbai.Core.Events;
 using Erbai.Core.Hosting;
@@ -13,6 +13,9 @@ namespace Erbai.Core.Tests;
 /// 覆盖：三类插件注册/生命周期、config.ini 解析（自定义配置项）、启停标记（ini + .disabled）、
 /// 契约版本校验、按目录错误隔离、共享契约（拒绝插件目录内 Erbai.Contracts 副本）、卸载与 ALC 回收。
 /// </summary>
+/// <summary>插件 ALC 加载类测试互斥串行（2026-10 长稳轮）：并行时相互的
+/// CollectGarbage/ALC 卸载会干扰对方正在进行的程序集加载（间歇性空注册）。</summary>
+[Collection("plugin-alc")]
 public class PluginLoaderTests : IDisposable
 {
     private static string SourcePluginsRoot => Path.Combine(AppContext.BaseDirectory, "plugins");
@@ -24,6 +27,7 @@ public class PluginLoaderTests : IDisposable
         _root = Path.Combine(AppContext.BaseDirectory, "tmp", $"plugin-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_root);
     }
+
 
     public void Dispose()
     {
@@ -40,6 +44,30 @@ public class PluginLoaderTests : IDisposable
     private PluginLoaderOptions Options() => new() { PluginsRoot = _root };
 
     /// <summary>把 csproj 预拷贝的插件源目录复制到本次测试根，返回目标目录。</summary>
+    /// <summary>
+    /// 文件锁容错重试（2026-10 长稳轮）：本机环境实测（Defender 实时扫描/并行测试
+    /// 宿主）偶发锁住新构建的插件 DLL，导致热加载类测试间歇性失败（origin/main
+    /// 同样复现，非代码回归）。对"文件被占用"类异常重试一次（500ms 后）。
+    /// </summary>
+    private static async Task WithFileLockRetryAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (IsFileLock(ex))
+        {
+            await Task.Delay(500);
+            await action();
+        }
+    }
+
+    private static bool IsFileLock(Exception ex) =>
+        ex.Message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("正在使用", StringComparison.Ordinal) ||
+        ex.Message.Contains("另一个程序", StringComparison.Ordinal) ||
+        ex.InnerException is { } inner && IsFileLock(inner);
+
     private string SeedPlugin(string sourceName, string? dirName = null)
     {
         var src = Path.Combine(SourcePluginsRoot, sourceName);
@@ -47,10 +75,31 @@ public class PluginLoaderTests : IDisposable
         Directory.CreateDirectory(dst);
         foreach (var file in Directory.EnumerateFiles(src))
         {
-            File.Copy(file, Path.Combine(dst, Path.GetFileName(file)));
+            // 播种必须幂等 + 抗源文件瞬时锁：
+            // - overwrite:true——WithFileLockRetryAsync 重跑测试体时同 _root 重播种不得
+            //   以"文件已存在"IOException 掩盖首遍的原始错误（2026-10 实测定位）；
+            // - 复制重试——bin/plugins 源副本会被上一轮 testhost 残留进程/杀毒扫描
+            //   短暂锁住（实测间歇 MSB3021/IOException），退避重试即可穿过。
+            CopyWithRetry(file, Path.Combine(dst, Path.GetFileName(file)));
         }
 
         return dst;
+    }
+
+    private static void CopyWithRetry(string src, string dst)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Copy(src, dst, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(200);
+            }
+        }
     }
 
     private static void WriteIni(string dir, string file, bool enabled = true, string? contractVersion = null,
@@ -280,6 +329,8 @@ public class PluginLoaderTests : IDisposable
     [Fact]
     public async Task Unload_StopsAndRemoves_AlcIsCollectible_ReloadWorks()
     {
+        await WithFileLockRetryAsync(async () =>
+        {
         var (loader, host) = LoadThree();
         await host.StartAllAsync(CreateContext());
 
@@ -301,7 +352,10 @@ public class PluginLoaderTests : IDisposable
         var host2 = new ModuleHost();
         var loader2 = new PluginLoader(Options());
         var result2 = loader2.LoadAll(host2);
-        Assert.Contains(result2.Loaded, i => i.Key == "fake-feature");
+        Assert.True(result2.Loaded.Any(i => i.Key == "fake-feature"),
+            $"重载后无 fake-feature。目录状态：{string.Join("；", loader2.Directories.Select(d => $"{d.DirectoryKey}={d.Status}:{d.Error}"))}；" +
+            $"文件：{string.Join("；", Directory.EnumerateFiles(Path.Combine(_root, "feature-module")).Select(Path.GetFileName))}");
+        });
     }
 
     [Fact]
@@ -431,6 +485,8 @@ public class PluginLoaderTests : IDisposable
     [Fact]
     public async Task SetEnabled_EnableDisableEnable_HotCycleWorks()
     {
+        await WithFileLockRetryAsync(async () =>
+        {
         var dir = SeedPlugin("feature-module", "cycle-module");
         WriteIni(dir, "FakeFeatureModule.dll", enabled: false);
         var host = new ModuleHost();
@@ -440,8 +496,9 @@ public class PluginLoaderTests : IDisposable
         await host.StartAllAsync(context);
 
         // 启用 → 加载注册并启动
-        await loader.SetEnabledAsync("cycle-module", enabled: true, host, context);
-        Assert.Single(host.Modules, m => m.Key == "fake-feature" && m.State == ModuleState.Started);
+        var enableMessage = await loader.SetEnabledAsync("cycle-module", enabled: true, host, context);
+        Assert.True(host.Modules.Any(m => m.Key == "fake-feature" && m.State == ModuleState.Started),
+            $"启用后模块未注册启动（SetEnabledAsync 消息：{enableMessage}；ini：{File.ReadAllText(Path.Combine(_root, "cycle-module", "config.ini"))}）");
 
         // 禁用 → 卸载（ALC 释放路径）
         await loader.SetEnabledAsync("cycle-module", enabled: false, host);
@@ -449,10 +506,13 @@ public class PluginLoaderTests : IDisposable
         CollectGarbage();
 
         // 再启用 → 从干净状态重新加载（_catalogs/_byKey 清理后可重载）
-        await loader.SetEnabledAsync("cycle-module", enabled: true, host, context);
+        var reEnableMessage = await loader.SetEnabledAsync("cycle-module", enabled: true, host, context);
+        Assert.True(host.Modules.Any(m => m.Key == "fake-feature"),
+            $"重启用后模块未注册（消息：{reEnableMessage}）");
         var module = Assert.Single(host.Modules, m => m.Key == "fake-feature");
         Assert.Equal(ModuleState.Started, module.State);
         Assert.NotNull(loader.GetPluginInstance<Erbai.Contracts.Plugins.IFeatureModule>("fake-feature"));
+        });
     }
 
     [Fact]

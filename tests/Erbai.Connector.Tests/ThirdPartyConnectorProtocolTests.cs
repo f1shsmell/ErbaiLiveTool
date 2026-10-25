@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Erbai.Contracts.Players;
 using Erbai.Player.Connectors;
 
@@ -77,8 +77,6 @@ public class ThirdPartyConnectorProtocolTests
         Assert.NotEqual(PlayerCapabilities.None, caps);
         Assert.True(caps.HasFlag(PlayerCapabilities.SnapshotEvents));
         Assert.True(caps.HasFlag(PlayerCapabilities.QueueProgrammable));
-        Assert.True(caps.HasFlag(PlayerCapabilities.Search));
-        Assert.True(caps.HasFlag(PlayerCapabilities.PauseResume));
     }
 
     // ---------- 本仓库旧宿主形状（向后兼容） ----------

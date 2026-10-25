@@ -1,5 +1,6 @@
 using Erbai.App.Services;
 using Erbai.Contracts.Configuration;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -31,11 +32,36 @@ public sealed partial class DisplayPage : Page
     private readonly System.Threading.SemaphoreSlim _overlaySaveGate = new(1, 1);
     private bool _overlayWindowUiReady;
 
+    /// <summary>样式滑杆持久化防抖（2026-10 UI 轮）：滑杆 ValueChanged 每个刻度
+    /// 都会触发保存——拖一次滑杆 = 几十次 config.json 落盘 + 悬浮窗热应用。
+    /// 改为停顿 300ms 后保存一次；色块即时同步（不等落盘），视觉反馈不受影响。</summary>
+    private const int StyleSaveDebounceMs = 300;
+    private DispatcherQueueTimer? _styleSaveTimer;
+
     public DisplayPage()
     {
         InitializeComponent();
         OverlayUrlText.Text = App.Services.OverlayUrl;
         LoadOverlayWindowSettings();
+
+        // NavigationCacheMode=Enabled：页面实例缓存，样式编辑中途切页不丢；
+        // Overlay URL 可能因端口上探变化，Loaded 时刷新（表单回填不动，避免抹掉未保存编辑）
+        Loaded += (_, _) => OverlayUrlText.Text = App.Services.OverlayUrl;
+
+        _styleSaveTimer = DispatcherQueue.CreateTimer();
+        _styleSaveTimer.Interval = TimeSpan.FromMilliseconds(StyleSaveDebounceMs);
+        _styleSaveTimer.IsRepeating = false;
+        _styleSaveTimer.Tick += (_, _) => _ = SaveOverlayWindowsAsync();
+
+        // 离开页面时若还有待保存的样式改动，立即落盘（防抖不能吞掉最后一步）
+        Unloaded += (_, _) =>
+        {
+            if (_styleSaveTimer is { IsRunning: true })
+            {
+                _styleSaveTimer.Stop();
+                _ = SaveOverlayWindowsAsync();
+            }
+        };
     }
 
     /// <summary>复制 Overlay URL 到剪贴板（OBS 浏览器源 / 悬浮窗页面共享地址）。</summary>
@@ -188,8 +214,9 @@ public sealed partial class DisplayPage : Page
         await SaveOverlayWindowsAsync();
     }
 
-    /// <summary>样式参数变化（颜色/滑杆/字体）：同 Toggle 路径持久化 + 热应用（2026-08-29 样式参数化）。</summary>
-    private async void OnOverlayStyleChanged(object sender, object e)
+    /// <summary>样式参数变化（颜色/滑杆/字体）：色块即时同步，落盘+热应用防抖 300ms
+    ///（2026-08-29 样式参数化；2026-10 防抖——拖动滑杆不再每刻度写盘）。</summary>
+    private void OnOverlayStyleChanged(object sender, object e)
     {
         // 必须先守卫再同步色块：XAML 解析期 ColorPicker 被赋默认色即触发 ColorChanged，
         // 此时后续元素的 x:Name 字段尚未连接（点歌 AccentPicker 早于排队/弹幕的 Chip），
@@ -203,7 +230,8 @@ public sealed partial class DisplayPage : Page
         }
 
         SyncColorChips(); // 色块预览当前取色器颜色（Flyout 收起后即当前值）
-        await SaveOverlayWindowsAsync();
+        _styleSaveTimer?.Stop();
+        _styleSaveTimer?.Start();
     }
 
     private async Task SaveOverlayWindowsAsync()
