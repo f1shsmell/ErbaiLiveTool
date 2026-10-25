@@ -1,4 +1,4 @@
-; ErbaiLiveTool（二白直播工具）Inno Setup 安装器配方
+﻿; ErbaiLiveTool（二白直播工具）Inno Setup 安装器配方
 ; Stage B（决策 #14 修订，2026-08-27）：FDD + Inno Setup 安装器
 ;   - 框架依赖（FDD，.NET 8 Desktop Runtime 由安装器自动部署，App 不内置运行时）
 ;   - WinAppSDK 随应用自带（WindowsAppSDKSelfContained=true，故无需部署 WindowsAppRuntime）
@@ -49,7 +49,7 @@ AllowNoIcons=yes
 ; 与主程序 requireAdministrator 一致，参考 FufuLauncher）
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 MinVersion=10.0.17763
 
 OutputDir={#OutDir}
