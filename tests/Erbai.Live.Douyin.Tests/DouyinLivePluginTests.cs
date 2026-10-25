@@ -1,4 +1,4 @@
-using System.Net.WebSockets;
+﻿using System.Net.WebSockets;
 using System.Text.Json;
 using Erbai.Contracts.Configuration;
 using Erbai.Contracts.Live;
@@ -9,6 +9,16 @@ namespace Erbai.Live.Douyin.Tests;
 /// <summary>DouyinLivePlugin：WS 连接（连接工厂注入）/ 报文归一 / 断线重连 / 事件通道。</summary>
 public class DouyinLivePluginTests
 {
+    /// <summary>等插件连上 fake 服务器（CI 冷启动下固定 300ms 常常等不到握手，推送落空）。</summary>
+    private static async Task WaitForConnectedAsync(FakeDouyinWsServer server, int timeoutMs = 8000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (server.ConnectedCount == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+    }
+
     private static AppConfig ConfigWith(int port) =>
         AppConfig.CreateDefault() with { DouyinWsUrl = $"ws://127.0.0.1:{port}" };
 
@@ -23,7 +33,7 @@ public class DouyinLivePluginTests
         var config = ConfigWith(server.Port);
         await plugin.StartAsync(config, CancellationToken.None);
 
-        await Task.Delay(300); // 等 WS 握手完成
+        await WaitForConnectedAsync(server); // 等 WS 握手完成
 
         await server.PushAsync(Envelope(1, new
         {
@@ -98,7 +108,7 @@ public class DouyinLivePluginTests
             reconnectDelay: TimeSpan.FromMilliseconds(200),
             allowedRoomIds: new HashSet<string> { "111" });
         await plugin.StartAsync(ConfigWith(server.Port), CancellationToken.None);
-        await Task.Delay(300);
+        await WaitForConnectedAsync(server);
 
         await server.PushAsync(Envelope(1, new { Content = "别的房间", WebRoomId = "222", User = new { Nickname = "A", Id = "1" } }));
         await server.PushAsync(Envelope(1, new { Content = "本房间", WebRoomId = "111", User = new { Nickname = "B", Id = "2" } }));
@@ -120,7 +130,7 @@ public class DouyinLivePluginTests
             reconnectDelay: TimeSpan.FromMilliseconds(200),
             allowedRoomIds: new HashSet<string> { "111" });
         await plugin.StartAsync(ConfigWith(server.Port), CancellationToken.None);
-        await Task.Delay(300);
+        await WaitForConnectedAsync(server);
 
         plugin.UpdateRoomFilter(["222"]); // 模拟用户改白名单后重启
 
