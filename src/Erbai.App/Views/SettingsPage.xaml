@@ -5,161 +5,176 @@
     xmlns:ux="using:Erbai.App.Ux"
     xmlns:tk="using:CommunityToolkit.WinUI.Controls"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Padding="28,24,28,20" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-    <!-- 2026-10 布局样式轮：手写 140/* 标签网格（12+ 处重复）整体迁移到
-         CommunityToolkit SettingsCard（Windows 11 设置观感：左标题/描述、右控件、
-         悬停反馈），命名元素与事件全部原样保留（代码层零改动）。
-         小节标题带品牌色图标；卡片组 4px 间距成组。 -->
-    <ScrollViewer>
-        <StackPanel Padding="24" Spacing="6" MaxWidth="760" HorizontalAlignment="Left">
-
-            <ux:PageHeader Icon="Setting" Title="设置" Margin="0,0,0,8"
-                           Subtitle="平台、播放器、B站账号与点歌规则；保存后立即生效" />
-
-            <!-- 常规 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE713;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="常规" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ux:PageHeader Icon="Setting" Title="设置"
+                           Subtitle="按分类管理应用选项，修改后立即生效" />
+            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="20,0,0,0">
+                <TextBlock Text="自动保存已开启" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                <TextBlock x:Name="SaveStatus" Text="所有更改自动保存" Style="{StaticResource CaptionTextStyle}" HorizontalAlignment="Right" />
             </StackPanel>
-            <tk:SettingsCard Header="关闭时最小化到托盘"
-                             Description="点击关闭按钮后程序在后台继续运行（弹幕监听不中断）；从系统托盘图标恢复或退出">
-                <ToggleSwitch x:Name="MinimizeToTrayToggle" OffContent="" OnContent="" />
-            </tk:SettingsCard>
+        </Grid>
 
-            <!-- 音乐播放器 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8D6;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="音乐播放器" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="播放器" Description="未安装的平台灰显；连接器由应用自动安装维护">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <!-- 选项在代码里按"是否已安装"动态生成：未安装的平台灰显（决策 D-D） -->
-                    <ComboBox x:Name="PlayerKeyCombo" Width="220" SelectionChanged="OnPlayerKeyChanged"
-                              PlaceholderText="选择播放器" />
-                    <TextBlock x:Name="PlayerStatusText" Text="-" VerticalAlignment="Center" IsTextSelectionEnabled="True"
-                               Style="{StaticResource CaptionTextStyle}" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <tk:SettingsCard x:Name="FoliaTokenCard" Visibility="Collapsed"
-                             Header="Folia Token" Description="bilincm.cn 的 Folia 访问 token">
-                <TextBox x:Name="FoliaTokenBox" Width="280" HorizontalAlignment="Right"
-                         PlaceholderText="Folia 访问 token" />
-            </tk:SettingsCard>
-            <StackPanel x:Name="PlayerInstallHintActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed" Margin="4,2,0,2">
-                <TextBlock x:Name="PlayerInstallHintText" Visibility="Collapsed"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="11"
-                           TextWrapping="Wrap" VerticalAlignment="Center" />
-                <Button Content="前往插件页安装" Click="OnGoToPluginsForPlayer" Padding="10,2" FontSize="11" />
-            </StackPanel>
-
-            <!-- B站账号 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE77B;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="B站账号" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="账号状态" Description="登录后可识别主播身份/规避风控；匿名也能收弹幕">
-                <StackPanel Spacing="8">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ux:StatusBadge x:Name="LoginBadge" />
-                        <TextBlock x:Name="LoginStatusText" Text="未登录" VerticalAlignment="Center" IsTextSelectionEnabled="True"
-                                   Style="{StaticResource CaptionTextStyle}" />
+        <Pivot Grid.Row="1" Style="{StaticResource AppPivotStyle}">
+            <PivotItem Header="常规">
+                <ScrollViewer>
+                    <StackPanel Padding="0,16,12,0" Spacing="8" MaxWidth="880">
+                        <TextBlock Text="应用行为" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,0,0,4" />
+                        <tk:SettingsCard Header="关闭时最小化到托盘"
+                                         Description="关闭窗口后继续在后台接收直播事件，可从系统托盘恢复或退出">
+                            <ToggleSwitch x:Name="MinimizeToTrayToggle" OffContent="" OnContent="" Toggled="OnAutoSaveToggle" />
+                        </tk:SettingsCard>
+                        <TextBlock Text="日志记录" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,16,0,4" />
+                        <tk:SettingsCard Header="直播事件落盘"
+                                         Description="将弹幕、礼物等事件写入日志文件，便于回看与问题诊断">
+                            <ToggleSwitch x:Name="LiveEventLogToggle" OffContent="" OnContent="" Toggled="OnAutoSaveToggle" />
+                        </tk:SettingsCard>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="QrLoginButton" Content="扫码登录" Click="OnQrLogin" />
-                        <Button x:Name="LogoutButton" Content="退出登录" IsEnabled="False" Click="OnLogout" />
+                </ScrollViewer>
+            </PivotItem>
+
+            <PivotItem Header="播放器">
+                <ScrollViewer>
+                    <StackPanel Padding="0,16,12,0" Spacing="8" MaxWidth="880">
+                        <TextBlock Text="音乐播放器" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,0,0,4" />
+                        <tk:SettingsCard Header="播放器"
+                                         Description="选择点歌使用的播放器；未安装的连接器可在插件页获取">
+                            <ComboBox x:Name="PlayerKeyCombo" Width="240" SelectionChanged="OnPlayerKeyChanged"
+                                      PlaceholderText="选择播放器" />
+                        </tk:SettingsCard>
+                        <Border Background="{ThemeResource AppSubtleBackgroundBrush}" CornerRadius="6" Padding="16,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="运行状态" Style="{StaticResource CaptionTextStyle}" />
+                                <TextBlock x:Name="PlayerStatusText" Text="-" IsTextSelectionEnabled="True" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <StackPanel x:Name="PlayerInstallHintActions" Spacing="8" Visibility="Collapsed" Margin="4,4,0,0">
+                            <TextBlock x:Name="PlayerInstallHintText" Visibility="Collapsed"
+                                       Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                            <Button Content="前往插件页安装" Click="OnGoToPluginsForPlayer" HorizontalAlignment="Left" />
+                        </StackPanel>
+                        <tk:SettingsCard x:Name="FoliaTokenCard" Visibility="Collapsed"
+                                         Header="Folia Token" Description="用于连接 Folia 服务，输入后自动保存">
+                            <TextBox x:Name="FoliaTokenBox" Width="280" HorizontalAlignment="Right"
+                                     PlaceholderText="Folia 访问 token" TextChanged="OnAutoSaveText" />
+                        </tk:SettingsCard>
                     </StackPanel>
-                </StackPanel>
-            </tk:SettingsCard>
+                </ScrollViewer>
+            </PivotItem>
 
-            <!-- 空闲歌单 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8D6;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="空闲歌单" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="启用空闲歌单" Description="队列空时自动播放背景音乐；新点歌立即打断">
-                <ToggleSwitch x:Name="IdleEnabledToggle" OffContent="" OnContent="" />
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="播放间隔（秒）" Description="每首空闲歌播完后的等待时长">
-                <NumberBox x:Name="IdleIntervalBox" Minimum="1" Maximum="3600" Value="30" Width="140"
-                           HorizontalAlignment="Right" />
-            </tk:SettingsCard>
+            <PivotItem Header="直播">
+                <ScrollViewer>
+                    <StackPanel Padding="0,16,12,0" Spacing="8" MaxWidth="880">
+                        <TextBlock Text="B站账号" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,0,0,4" />
+                        <tk:SettingsCard Header="账号状态"
+                                         Description="登录后可识别主播身份；匿名模式也可以接收弹幕">
+                            <StackPanel Spacing="10" HorizontalAlignment="Right">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ux:StatusBadge x:Name="LoginBadge" />
+                                    <TextBlock x:Name="LoginStatusText" Text="未登录" VerticalAlignment="Center"
+                                               IsTextSelectionEnabled="True" Style="{StaticResource CaptionTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                    <Button x:Name="QrLoginButton" Content="扫码登录" Click="OnQrLogin" />
+                                    <Button x:Name="LogoutButton" Content="退出登录" IsEnabled="False" Click="OnLogout" />
+                                </StackPanel>
+                            </StackPanel>
+                        </tk:SettingsCard>
 
-            <!-- 点歌队列 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8FD;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="点歌队列" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="队列容量" Description="同时最多保留几首待播放歌曲（含正在播放）">
-                <NumberBox x:Name="QueueMaxSizeBox" Minimum="1" Maximum="999" Value="20" Width="140"
-                           HorizontalAlignment="Right" />
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="单用户上限" Description="同一观众最多同时保留的未完成歌曲数">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <ToggleSwitch x:Name="QueueUserLimitToggle" OffContent="不限制" OnContent="限制" />
-                    <NumberBox x:Name="QueueMaxPerUserBox" Minimum="1" Maximum="100" Value="1" Width="140" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="重复点歌去重" Description="同一首歌已在队列时拒绝重复点歌">
-                <ToggleSwitch x:Name="QueueDedupeToggle" OffContent="" OnContent="" />
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="队列展示条数" Description="快照/网页播放列表显示的最大条目数">
-                <NumberBox x:Name="QueueDisplayLimitBox" Minimum="1" Maximum="100" Value="5" Width="140"
-                           HorizontalAlignment="Right" />
-            </tk:SettingsCard>
+                        <TextBlock Text="空闲播放" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,16,0,4" />
+                        <tk:SettingsCard Header="空闲时自动播放"
+                                         Description="点歌队列空时轮播指定歌单，新点歌会立即打断空闲播放">
+                            <ToggleSwitch x:Name="IdleEnabledToggle" OffContent="" OnContent="" Toggled="OnAutoSaveToggle" />
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="播放间隔（秒）" Description="每首空闲歌曲播放结束后的等待时长">
+                            <NumberBox x:Name="IdleIntervalBox" Minimum="1" Maximum="3600" Value="30" Width="140"
+                                       HorizontalAlignment="Right" ValueChanged="OnAutoSaveNumber" />
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="当前空闲播放源" Description="在歌单页为任意歌单打开“空闲播放源”即可指定">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock x:Name="IdleSourceText" Text="未指定" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                                <HyperlinkButton Content="前往歌单页" Click="OnGotoPlaylists" Padding="0" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
 
-            <!-- 点歌等级门槛 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8A9;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="点歌等级门槛" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="抖音粉丝团等级" Description="灯牌等级达到该级（含）才可点歌；等级未识别时拒绝">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <ToggleSwitch x:Name="DouyinFanLevelToggle" OffContent="不限制" OnContent="限制" />
-                    <NumberBox x:Name="DouyinFanLevelBox" Minimum="1" Maximum="99" Value="1" Width="140" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="B站粉丝勋章等级" Description="佩戴粉丝勋章并达到该级（含）才可点歌；等级未识别时拒绝">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <ToggleSwitch x:Name="BilibiliMedalLevelToggle" OffContent="不限制" OnContent="限制" />
-                    <NumberBox x:Name="BilibiliMedalLevelBox" Minimum="1" Maximum="99" Value="1" Width="140" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="主播/管理员绕过" Description="主播、管理员（房管）点歌不受等级门槛限制">
-                <ToggleSwitch x:Name="AdminBypassToggle" OffContent="不绕过" OnContent="绕过" />
-            </tk:SettingsCard>
+            <PivotItem Header="点歌规则">
+                <ScrollViewer>
+                    <StackPanel Padding="0,16,12,0" Spacing="8" MaxWidth="880">
+                        <TextBlock Text="队列管理" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,0,0,4" />
+                        <tk:SettingsCard Header="队列容量" Description="最多保留的待播放歌曲数，包含正在播放的歌曲">
+                            <NumberBox x:Name="QueueMaxSizeBox" Minimum="1" Maximum="999" Value="20" Width="140"
+                                       HorizontalAlignment="Right" ValueChanged="OnAutoSaveNumber" />
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="单用户上限" Description="同一观众最多同时保留的未完成歌曲数">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <ToggleSwitch x:Name="QueueUserLimitToggle" OffContent="不限制" OnContent="限制" Toggled="OnAutoSaveToggle" />
+                                <NumberBox x:Name="QueueMaxPerUserBox" Minimum="1" Maximum="100" Value="1" Width="140"
+                                           ValueChanged="OnAutoSaveNumber" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="重复点歌去重" Description="同一首歌已在队列时拒绝重复提交">
+                            <ToggleSwitch x:Name="QueueDedupeToggle" OffContent="" OnContent="" Toggled="OnAutoSaveToggle" />
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="队列展示条数" Description="快照和网页播放列表显示的最大条目数">
+                            <NumberBox x:Name="QueueDisplayLimitBox" Minimum="1" Maximum="100" Value="5" Width="140"
+                                       HorizontalAlignment="Right" ValueChanged="OnAutoSaveNumber" />
+                        </tk:SettingsCard>
 
-            <!-- 日志 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8BD;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="日志" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="直播事件落盘" Description="弹幕/礼物等事件写入 logs/erbai-live-*.log；日志页打开时回看当天直播事件">
-                <ToggleSwitch x:Name="LiveEventLogToggle" OffContent="" OnContent="" />
-            </tk:SettingsCard>
+                        <TextBlock Text="点歌权限" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,16,0,4" />
+                        <tk:SettingsCard Header="抖音粉丝团等级" Description="仅允许达到指定灯牌等级的观众点歌">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <ToggleSwitch x:Name="DouyinFanLevelToggle" OffContent="不限制" OnContent="限制" Toggled="OnAutoSaveToggle" />
+                                <NumberBox x:Name="DouyinFanLevelBox" Minimum="1" Maximum="99" Value="1" Width="140"
+                                           ValueChanged="OnAutoSaveNumber" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="B站粉丝勋章等级" Description="仅允许佩戴勋章并达到指定等级的观众点歌">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <ToggleSwitch x:Name="BilibiliMedalLevelToggle" OffContent="不限制" OnContent="限制" Toggled="OnAutoSaveToggle" />
+                                <NumberBox x:Name="BilibiliMedalLevelBox" Minimum="1" Maximum="99" Value="1" Width="140"
+                                           ValueChanged="OnAutoSaveNumber" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="主播与管理员绕过" Description="主播和管理员点歌不受上述等级限制">
+                            <ToggleSwitch x:Name="AdminBypassToggle" OffContent="不绕过" OnContent="绕过" Toggled="OnAutoSaveToggle" />
+                        </tk:SettingsCard>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
 
-            <!-- 备份 / 恢复 -->
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
-                <FontIcon Glyph="&#xE8B7;" FontSize="14" Foreground="{ThemeResource BrandAccentBrush}" />
-                <TextBlock Text="备份 / 恢复" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-            </StackPanel>
-            <tk:SettingsCard Header="备份" Description="数据库一致性快照 + 配置 → zip">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="创建备份" Click="OnCreateBackup" />
-                    <Button Content="打开备份目录" Click="OnOpenBackupFolder" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <tk:SettingsCard Header="从备份恢复" Description="选择备份文件后恢复数据库与配置">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox x:Name="BackupListCombo" Width="280" PlaceholderText="选择备份文件…" />
-                    <Button Content="恢复" Click="OnRestoreBackup" />
-                </StackPanel>
-            </tk:SettingsCard>
-            <TextBlock x:Name="BackupStatus" Text="" IsTextSelectionEnabled="True" Style="{StaticResource CaptionTextStyle}" Margin="4,0,0,0" />
-
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,16,0,8">
-                <Button Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="OnSave" />
-                <TextBlock x:Name="SaveStatus" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
-            </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+            <PivotItem Header="数据管理">
+                <ScrollViewer>
+                    <StackPanel Padding="0,16,12,0" Spacing="8" MaxWidth="880">
+                        <TextBlock Text="备份与恢复" Style="{StaticResource SectionHeaderTextStyle}" Margin="4,0,0,4" />
+                        <tk:SettingsCard Header="创建备份" Description="将数据库一致性快照与当前配置打包为 ZIP 文件">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="创建备份" Click="OnCreateBackup" />
+                                <Button Content="打开备份目录" Click="OnOpenBackupFolder" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                        <tk:SettingsCard Header="从备份恢复" Description="选择备份文件替换当前数据库与配置，恢复前会再次确认">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox x:Name="BackupListCombo" Width="280" PlaceholderText="选择备份文件…" />
+                                <Button Content="恢复" Click="OnRestoreBackup" />
+                            </StackPanel>
+                        </tk:SettingsCard>
+                        <TextBlock x:Name="BackupStatus" Text="" IsTextSelectionEnabled="True"
+                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="4,4,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
+    </Grid>
 </Page>

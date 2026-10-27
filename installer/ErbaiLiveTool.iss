@@ -40,8 +40,8 @@ VersionInfoVersion={#AppVersionNum}
 VersionInfoProductVersion={#AppVersionNum}
 VersionInfoDescription={#AppDisplayName} 安装程序
 UninstallDisplayName={#AppDisplayName}
-; 安装向导图标（logo 2026-09-08）：Assets\AppLogo.ico 随仓库分发，与主程序同源
-SetupIconFile=Assets\AppLogo.ico
+; 安装向导图标与主程序同源
+SetupIconFile=Assets\AppLogoV2.ico
 
 ; 用户级安装（决策 #14：安装到 %LOCALAPPDATA%\Programs\，可合规免系统目录写权限）
 DefaultDirName={localappdata}\Programs\{#AppName}
