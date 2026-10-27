@@ -353,9 +353,9 @@ public class DouyinGrabberHostTests
 
         await host.StartAsync();
 
-        // 等日志到达（异步读取循环）
+        // 等日志到达（异步读取循环）；CI 冷启动下 PowerShell 管道初始化可能超过 8 秒
         List<LogEntry> entries = [];
-        var deadline = DateTime.UtcNow.AddSeconds(8);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (DateTime.UtcNow < deadline)
         {
             while (sub.Reader.TryRead(out var entry))
