@@ -19,13 +19,12 @@ public sealed record UserDisplay(User User)
 }
 
 /// <summary>
-/// 管理页（四分区）：空闲歌单 / 歌曲黑名单 / 用户黑名单 / 管理员。
-/// 全部复用现有领域服务（SongBlacklist / IStorageEngine / SongQueueService），
-/// 改动即写盘并热生效，无需重启。
+/// 管理页（三分区）：歌曲黑名单 / 用户黑名单 / 管理员。
+/// 全部复用现有领域服务（SongBlacklist / IStorageEngine），改动即写盘并热生效，
+/// 无需重启。空闲播放源已迁至「歌单」页（PlaylistPage）。
 /// </summary>
 public sealed partial class AdminPage : Page
 {
-    private readonly ObservableCollection<IdleSong> _idle = [];
     private readonly ObservableCollection<string> _songBan = [];
     private readonly ObservableCollection<BannedUser> _userBan = [];
     private readonly ObservableCollection<User> _banCandidates = [];
@@ -34,7 +33,6 @@ public sealed partial class AdminPage : Page
     public AdminPage()
     {
         InitializeComponent();
-        IdleList.ItemsSource = _idle;
         SongBanList.ItemsSource = _songBan;
         UserBanList.ItemsSource = _userBan;
         UserBanCandidates.ItemsSource = _banCandidates;
@@ -48,98 +46,13 @@ public sealed partial class AdminPage : Page
     {
         try
         {
-            var idle = await App.Services.Storage.LoadIdleSongsAsync();
-            foreach (var song in idle)
-            {
-                _idle.Add(song);
-            }
-
-            IdleEmptyText.Visibility = _idle.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             RefreshSongBanList();
             await RefreshUserBanListAsync();
             await RefreshAdminListAsync();
         }
         catch (Exception ex)
         {
-            IdleStatus.Text = $"加载失败：{ex.Message}";
-        }
-    }
-
-    // ---- 空闲歌单 ----
-
-    private async void OnAddIdle(object sender, RoutedEventArgs e)
-    {
-        var name = IdleNameBox.Text.Trim();
-        if (name.Length == 0)
-        {
-            IdleStatus.Text = "请输入歌名";
-            return;
-        }
-
-        _idle.Add(new IdleSong { Name = name, Singer = IdleSingerBox.Text.Trim() });
-        IdleNameBox.Text = "";
-        IdleSingerBox.Text = "";
-        IdleEmptyText.Visibility = Visibility.Collapsed;
-        await PersistIdleSongsAsync();
-    }
-
-    private async void OnMoveIdleUp(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.DataContext is not IdleSong song)
-        {
-            return;
-        }
-
-        var index = _idle.IndexOf(song);
-        if (index <= 0)
-        {
-            return;
-        }
-
-        _idle.Move(index, index - 1);
-        await PersistIdleSongsAsync();
-    }
-
-    private async void OnMoveIdleDown(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.DataContext is not IdleSong song)
-        {
-            return;
-        }
-
-        var index = _idle.IndexOf(song);
-        if (index < 0 || index >= _idle.Count - 1)
-        {
-            return;
-        }
-
-        _idle.Move(index, index + 1);
-        await PersistIdleSongsAsync();
-    }
-
-    private async void OnRemoveIdle(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.DataContext is not IdleSong song)
-        {
-            return;
-        }
-
-        _idle.Remove(song);
-        IdleEmptyText.Visibility = _idle.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        await PersistIdleSongsAsync();
-    }
-
-    private async Task PersistIdleSongsAsync()
-    {
-        try
-        {
-            // ReloadIdleSongsAsync = 更新内存 + 写盘 + 唤醒 worker，立即生效
-            await App.Services.Queue.ReloadIdleSongsAsync(_idle.ToList());
-            IdleStatus.Text = "已保存并生效";
-        }
-        catch (Exception ex)
-        {
-            IdleStatus.Text = $"保存失败：{ex.Message}";
+            SongBanStatus.Text = $"加载失败：{ex.Message}";
         }
     }
 

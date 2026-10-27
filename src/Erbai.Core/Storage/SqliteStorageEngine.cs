@@ -11,14 +11,37 @@ namespace Erbai.Core.Storage;
 /// SQLite 存储引擎：WAL、专用线程串行化、BEGIN IMMEDIATE 内
 /// MAX(sequence)+1 原子分配、CAS 更新（expected_statuses + 流转表校验）、
 /// queue_events 状态审计流、schema_meta 版本化迁移框架、SQLite backup API
-/// 一致性备份。v1 schema 一次建终态（干净库，无旧迁移史）。
+/// 一致性备份。v2：独立空闲歌单收编为多歌单（playlists/playlist_songs，
+/// 指定其一为空闲播放源）。
 /// </summary>
 public sealed class SqliteStorageEngine : IStorageEngine
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
 
-    /// <summary>版本化迁移语句（未来版本在此追加；当前 v1 即终态）。</summary>
-    private static readonly IReadOnlyDictionary<int, string[]> Migrations = new Dictionary<int, string[]>();
+    /// <summary>
+    /// 版本化迁移语句（未来版本在此追加）。迁移在大建表块之后执行——新表结构
+    /// 由大建表块负责（IF NOT EXISTS 对新旧库都幂等），迁移只做数据收编。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<int, string[]> Migrations = new Dictionary<int, string[]>
+    {
+        // v1→v2：独立空闲歌单 → 多歌单（指定其一为空闲播放源）。存量
+        // idle_playlist_songs 收编进默认歌单"我的空闲歌单"并自动标记 is_idle，
+        // 老用户升级后空闲轮播行为不变；空表也建歌单（保留"曾配置过"的状态）。
+        [2] =
+        [
+            """
+            INSERT INTO playlists(name, source, source_id, is_idle, play_mode, created_at, updated_at)
+            VALUES ('我的空闲歌单', 'local', '', 1, 'sequential',
+                    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+            """,
+            """
+            INSERT INTO playlist_songs(playlist_id, name, singer, position)
+            SELECT (SELECT id FROM playlists WHERE is_idle = 1), name, singer, position
+            FROM idle_playlist_songs ORDER BY position, id;
+            """,
+            "DROP TABLE idle_playlist_songs;",
+        ],
+    };
 
     private readonly string _path;
     private SqliteExecutor? _executor;
@@ -423,12 +446,29 @@ public sealed class SqliteStorageEngine : IStorageEngine
             CREATE TABLE IF NOT EXISTS banned_songs (
                 rule TEXT PRIMARY KEY
             );
-            CREATE TABLE IF NOT EXISTS idle_playlist_songs (
+            CREATE TABLE IF NOT EXISTS playlists (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                singer TEXT NOT NULL DEFAULT '',
-                position INTEGER NOT NULL
+                source TEXT NOT NULL DEFAULT 'local',
+                source_id TEXT NOT NULL DEFAULT '',
+                is_idle INTEGER NOT NULL DEFAULT 0,
+                play_mode TEXT NOT NULL DEFAULT 'sequential',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
+            -- 空闲播放源全局唯一（partial unique index；SetIdle 先清后标兜底）
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_idle
+                ON playlists(is_idle) WHERE is_idle = 1;
+            CREATE TABLE IF NOT EXISTS playlist_songs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                playlist_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                singer TEXT NOT NULL DEFAULT '',
+                position INTEGER NOT NULL,
+                search_json TEXT,
+                FOREIGN KEY(playlist_id) REFERENCES playlists(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_playlist_songs ON playlist_songs(playlist_id, position);
             CREATE TABLE IF NOT EXISTS queueup_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
@@ -1004,49 +1044,188 @@ public sealed class SqliteStorageEngine : IStorageEngine
             return true;
         }, ct);
 
-    // ---- idle_playlist 域 ----
+    // ---- playlists 域 ----
 
-    public Task<IReadOnlyList<IdleSong>> LoadIdleSongsAsync(CancellationToken ct = default) =>
+    /// <summary>歌单行 SELECT 骨架（song_count 联表计数；WHERE/ORDER 由各查询追加）。</summary>
+    private const string PlaylistSelect = """
+        SELECT p.id, p.name, p.source, p.source_id, p.is_idle, p.play_mode,
+               p.created_at, p.updated_at,
+               (SELECT COUNT(*) FROM playlist_songs s WHERE s.playlist_id = p.id) AS song_count
+        FROM playlists p
+        """;
+
+    public Task<IReadOnlyList<Playlist>> ListPlaylistsAsync(CancellationToken ct = default) =>
         ExecuteAsync(connection =>
         {
-            var list = new List<IdleSong>();
+            var list = new List<Playlist>();
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT name, singer FROM idle_playlist_songs ORDER BY position, id";
+            command.CommandText = $"{PlaylistSelect} ORDER BY p.is_idle DESC, p.id ASC";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                list.Add(new IdleSong { Name = reader.GetString(0), Singer = reader.GetString(1) });
+                list.Add(ReadPlaylist(reader));
             }
 
-            return (IReadOnlyList<IdleSong>)list;
+            return (IReadOnlyList<Playlist>)list;
         }, ct);
 
-    public Task SaveIdleSongsAsync(IReadOnlyList<IdleSong> songs, CancellationToken ct = default) =>
+    public Task<Playlist?> GetPlaylistAsync(long playlistId, CancellationToken ct = default) =>
+        ExecuteAsync(connection => ReadPlaylistById(connection, playlistId), ct);
+
+    public Task<Playlist?> GetIdlePlaylistAsync(CancellationToken ct = default) =>
         ExecuteAsync(connection =>
         {
-            var rows = songs
-                .Select((song, index) => (song, index))
-                .Where(item => !string.IsNullOrWhiteSpace(item.song.Name))
-                .Select(item => (Name: item.song.Name.Trim(), Singer: (item.song.Singer ?? "").Trim(), Position: item.index))
-                .ToList();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"{PlaylistSelect} WHERE p.is_idle = 1";
+            using var reader = command.ExecuteReader();
+            return reader.Read() ? ReadPlaylist(reader) : null;
+        }, ct);
+
+    public Task<Playlist> CreatePlaylistAsync(
+        string name,
+        PlaylistSource source = PlaylistSource.Local,
+        string sourceId = "",
+        CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            var trimmed = name?.Trim() ?? throw new ArgumentException("playlist name is required", nameof(name));
+            if (trimmed.Length == 0)
+            {
+                throw new ArgumentException("playlist name is required", nameof(name));
+            }
+
+            var now = UtcNowIso();
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = """
+                INSERT INTO playlists(name, source, source_id, is_idle, play_mode, created_at, updated_at)
+                VALUES ($name, $source, $sourceId, 0, 'sequential', $now, $now)
+                """;
+            insertCommand.Parameters.AddWithValue("$name", trimmed);
+            insertCommand.Parameters.AddWithValue("$source", PlaylistSourceToDb(source));
+            insertCommand.Parameters.AddWithValue("$sourceId", sourceId ?? "");
+            insertCommand.Parameters.AddWithValue("$now", now);
+            insertCommand.ExecuteNonQuery();
+
+            using var lastIdCommand = connection.CreateCommand();
+            lastIdCommand.CommandText = "SELECT last_insert_rowid()";
+            var id = Convert.ToInt64(lastIdCommand.ExecuteScalar());
+            return ReadPlaylistById(connection, id)!;
+        }, ct);
+
+    public Task<Playlist?> FindImportedPlaylistAsync(PlaylistSource source, string sourceId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            if (source == PlaylistSource.Local || string.IsNullOrEmpty(sourceId))
+            {
+                return null; // 本机歌单无来源对账语义
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = $"{PlaylistSelect} WHERE p.source = $source AND p.source_id = $sourceId LIMIT 1";
+            command.Parameters.AddWithValue("$source", PlaylistSourceToDb(source));
+            command.Parameters.AddWithValue("$sourceId", sourceId);
+            using var reader = command.ExecuteReader();
+            return reader.Read() ? ReadPlaylist(reader) : null;
+        }, ct);
+
+    public Task<bool> ClearPlaylistSongsAsync(long playlistId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            using (var checkCommand = connection.CreateCommand())
+            {
+                checkCommand.CommandText = "SELECT 1 FROM playlists WHERE id = $id";
+                checkCommand.Parameters.AddWithValue("$id", playlistId);
+                if (checkCommand.ExecuteScalar() is null)
+                {
+                    return false;
+                }
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM playlist_songs WHERE playlist_id = $id";
+            command.Parameters.AddWithValue("$id", playlistId);
+            command.ExecuteNonQuery();
+            TouchPlaylist(connection, playlistId);
+            return true;
+        }, ct);
+
+    public Task<Playlist?> RenamePlaylistAsync(long playlistId, string name, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            var trimmed = name?.Trim() ?? "";
+            if (trimmed.Length == 0)
+            {
+                throw new ArgumentException("playlist name is required", nameof(name));
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE playlists SET name = $name, updated_at = $now WHERE id = $id";
+            command.Parameters.AddWithValue("$name", trimmed);
+            command.Parameters.AddWithValue("$now", UtcNowIso());
+            command.Parameters.AddWithValue("$id", playlistId);
+            return command.ExecuteNonQuery() == 0 ? null : ReadPlaylistById(connection, playlistId);
+        }, ct);
+
+    public Task<bool> DeletePlaylistAsync(long playlistId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
             using var transaction = connection.BeginTransaction(deferred: false);
             try
             {
-                using (var deleteCommand = connection.CreateCommand())
+                using (var songsCommand = connection.CreateCommand())
                 {
-                    deleteCommand.CommandText = "DELETE FROM idle_playlist_songs";
-                    deleteCommand.ExecuteNonQuery();
+                    songsCommand.CommandText = "DELETE FROM playlist_songs WHERE playlist_id = $id";
+                    songsCommand.Parameters.AddWithValue("$id", playlistId);
+                    songsCommand.ExecuteNonQuery();
                 }
 
-                foreach (var (name, singer, position) in rows)
+                using var command = connection.CreateCommand();
+                command.CommandText = "DELETE FROM playlists WHERE id = $id";
+                command.Parameters.AddWithValue("$id", playlistId);
+                var deleted = command.ExecuteNonQuery() > 0;
+                transaction.Commit();
+                return deleted;
+            }
+            catch
+            {
+                try
                 {
-                    using var insertCommand = connection.CreateCommand();
-                    insertCommand.CommandText =
-                        "INSERT INTO idle_playlist_songs(name, singer, position) VALUES ($name, $singer, $position)";
-                    insertCommand.Parameters.AddWithValue("$name", name);
-                    insertCommand.Parameters.AddWithValue("$singer", singer);
-                    insertCommand.Parameters.AddWithValue("$position", position);
-                    insertCommand.ExecuteNonQuery();
+                    transaction.Rollback();
+                }
+                catch (SqliteException)
+                {
+                }
+
+                throw;
+            }
+        }, ct);
+
+    public Task<Playlist?> SetIdlePlaylistAsync(long? playlistId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                // 先清后标（顺序不能反：partial unique index 禁止两行同时 is_idle=1）；
+                // 目标不存在时回滚——旧标记保持原状
+                using (var clearCommand = connection.CreateCommand())
+                {
+                    clearCommand.CommandText = "UPDATE playlists SET is_idle = 0 WHERE is_idle = 1";
+                    clearCommand.ExecuteNonQuery();
+                }
+
+                if (playlistId is { } id)
+                {
+                    using var markCommand = connection.CreateCommand();
+                    markCommand.CommandText =
+                        "UPDATE playlists SET is_idle = 1, updated_at = $now WHERE id = $id";
+                    markCommand.Parameters.AddWithValue("$now", UtcNowIso());
+                    markCommand.Parameters.AddWithValue("$id", id);
+                    if (markCommand.ExecuteNonQuery() == 0)
+                    {
+                        transaction.Rollback();
+                        return null;
+                    }
                 }
 
                 transaction.Commit();
@@ -1064,8 +1243,324 @@ public sealed class SqliteStorageEngine : IStorageEngine
                 throw;
             }
 
+            return playlistId is null ? null : ReadPlaylistById(connection, playlistId.Value);
+        }, ct);
+
+    public Task<Playlist?> SetPlayModeAsync(long playlistId, PlaylistPlayMode mode, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "UPDATE playlists SET play_mode = $mode, updated_at = $now WHERE id = $id";
+            command.Parameters.AddWithValue("$mode", PlaylistPlayModeToDb(mode));
+            command.Parameters.AddWithValue("$now", UtcNowIso());
+            command.Parameters.AddWithValue("$id", playlistId);
+            return command.ExecuteNonQuery() == 0 ? null : ReadPlaylistById(connection, playlistId);
+        }, ct);
+
+    public Task<IReadOnlyList<PlaylistSong>> ListPlaylistSongsAsync(long playlistId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            var list = new List<PlaylistSong>();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT * FROM playlist_songs WHERE playlist_id = $id ORDER BY position, id";
+            command.Parameters.AddWithValue("$id", playlistId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(ReadPlaylistSong(reader));
+            }
+
+            return (IReadOnlyList<PlaylistSong>)list;
+        }, ct);
+
+    public Task<PlaylistSong> AddPlaylistSongAsync(
+        long playlistId, string name, string singer = "", string? searchJson = null, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            var trimmedName = name?.Trim() ?? throw new ArgumentException("song name is required", nameof(name));
+            if (trimmedName.Length == 0)
+            {
+                throw new ArgumentException("song name is required", nameof(name));
+            }
+
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                var songId = InsertPlaylistSong(connection, playlistId, trimmedName, (singer ?? "").Trim(), searchJson);
+                TouchPlaylist(connection, playlistId);
+                transaction.Commit();
+                return ReadPlaylistSongById(connection, songId)!;
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (SqliteException)
+                {
+                }
+
+                throw;
+            }
+        }, ct);
+
+    public Task<int> AddPlaylistSongsAsync(
+        long playlistId, IReadOnlyList<(string Name, string Singer, string? SearchJson)> songs, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                var inserted = 0;
+                foreach (var song in songs)
+                {
+                    var name = song.Name?.Trim() ?? "";
+                    if (name.Length == 0)
+                    {
+                        continue; // 空歌名剔除（对齐旧 SaveIdleSongs 语义）
+                    }
+
+                    InsertPlaylistSong(connection, playlistId, name, (song.Singer ?? "").Trim(), song.SearchJson);
+                    inserted++;
+                }
+
+                if (inserted > 0)
+                {
+                    TouchPlaylist(connection, playlistId);
+                }
+
+                transaction.Commit();
+                return inserted;
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (SqliteException)
+                {
+                }
+
+                throw;
+            }
+        }, ct);
+
+    public Task<bool> RemovePlaylistSongAsync(long songId, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            var song = ReadPlaylistSongById(connection, songId);
+            if (song is null)
+            {
+                return false;
+            }
+
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "DELETE FROM playlist_songs WHERE id = $id";
+                command.Parameters.AddWithValue("$id", songId);
+                command.ExecuteNonQuery();
+                TouchPlaylist(connection, song.PlaylistId);
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (SqliteException)
+                {
+                }
+
+                throw;
+            }
+
             return true;
         }, ct);
+
+    public Task MovePlaylistSongAsync(long playlistId, long songId, int offset, CancellationToken ct = default) =>
+        ExecuteAsync(connection =>
+        {
+            if (offset is not (-1 or 1))
+            {
+                return true;
+            }
+
+            // 全量读序（id + position）后与相邻行交换 position——不能在单条
+            // UPDATE 的 CASE 子查询里互换：SQLite 逐行求值时子查询会读到
+            // 同语句已更新的行，交换退化为 no-op
+            var ordered = new List<(long Id, long Position)>();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT id, position FROM playlist_songs WHERE playlist_id = $id ORDER BY position, id";
+                command.Parameters.AddWithValue("$id", playlistId);
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    ordered.Add((reader.GetInt64(0), reader.GetInt64(1)));
+                }
+            }
+
+            var index = ordered.FindIndex(row => row.Id == songId);
+            var target = index + offset;
+            if (index < 0 || target < 0 || target >= ordered.Count)
+            {
+                return true; // 越界无操作
+            }
+
+            using var transaction = connection.BeginTransaction(deferred: false);
+            try
+            {
+                SetPlaylistSongPosition(connection, songId, ordered[target].Position);
+                SetPlaylistSongPosition(connection, ordered[target].Id, ordered[index].Position);
+                TouchPlaylist(connection, playlistId);
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (SqliteException)
+                {
+                }
+
+                throw;
+            }
+
+            return true;
+        }, ct);
+
+    private static void SetPlaylistSongPosition(SqliteConnection connection, long songId, long position)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE playlist_songs SET position = $position WHERE id = $id";
+        command.Parameters.AddWithValue("$position", position);
+        command.Parameters.AddWithValue("$id", songId);
+        command.ExecuteNonQuery();
+    }
+
+    private static long InsertPlaylistSong(
+        SqliteConnection connection, long playlistId, string name, string singer, string? searchJson)
+    {
+        using var positionCommand = connection.CreateCommand();
+        positionCommand.CommandText =
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_songs WHERE playlist_id = $id";
+        positionCommand.Parameters.AddWithValue("$id", playlistId);
+        var position = Convert.ToInt32(positionCommand.ExecuteScalar());
+
+        using var insertCommand = connection.CreateCommand();
+        insertCommand.CommandText = """
+            INSERT INTO playlist_songs(playlist_id, name, singer, position, search_json)
+            VALUES ($playlistId, $name, $singer, $position, $searchJson)
+            """;
+        insertCommand.Parameters.AddWithValue("$playlistId", playlistId);
+        insertCommand.Parameters.AddWithValue("$name", name);
+        insertCommand.Parameters.AddWithValue("$singer", singer);
+        insertCommand.Parameters.AddWithValue("$position", position);
+        insertCommand.Parameters.AddWithValue("$searchJson", (object?)searchJson ?? DBNull.Value);
+        insertCommand.ExecuteNonQuery();
+
+        using var lastIdCommand = connection.CreateCommand();
+        lastIdCommand.CommandText = "SELECT last_insert_rowid()";
+        return Convert.ToInt64(lastIdCommand.ExecuteScalar());
+    }
+
+    /// <summary>歌单内容变更时刷新 updated_at（列表对账依据）。</summary>
+    private static void TouchPlaylist(SqliteConnection connection, long playlistId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE playlists SET updated_at = $now WHERE id = $id";
+        command.Parameters.AddWithValue("$now", UtcNowIso());
+        command.Parameters.AddWithValue("$id", playlistId);
+        command.ExecuteNonQuery();
+    }
+
+    private static Playlist? ReadPlaylistById(SqliteConnection connection, long playlistId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"{PlaylistSelect} WHERE p.id = $id";
+        command.Parameters.AddWithValue("$id", playlistId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadPlaylist(reader) : null;
+    }
+
+    private static PlaylistSong? ReadPlaylistSongById(SqliteConnection connection, long songId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM playlist_songs WHERE id = $id";
+        command.Parameters.AddWithValue("$id", songId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadPlaylistSong(reader) : null;
+    }
+
+    private static Playlist ReadPlaylist(SqliteDataReader reader) => new()
+    {
+        Id = reader.GetInt64(reader.GetOrdinal("id")),
+        Name = reader.GetString(reader.GetOrdinal("name")),
+        Source = PlaylistSourceFromDb(reader.GetString(reader.GetOrdinal("source"))),
+        SourceId = reader.GetString(reader.GetOrdinal("source_id")),
+        IsIdle = reader.GetInt64(reader.GetOrdinal("is_idle")) != 0,
+        PlayMode = PlaylistPlayModeFromDb(reader.GetString(reader.GetOrdinal("play_mode"))),
+        CreatedAt = ParseIso(reader.GetString(reader.GetOrdinal("created_at"))),
+        UpdatedAt = ParseIso(reader.GetString(reader.GetOrdinal("updated_at"))),
+        SongCount = (int)reader.GetInt64(reader.GetOrdinal("song_count")),
+    };
+
+    private static PlaylistSong ReadPlaylistSong(SqliteDataReader reader)
+    {
+        var searchJson = reader.IsDBNull(reader.GetOrdinal("search_json"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("search_json"));
+        return new PlaylistSong
+        {
+            Id = reader.GetInt64(reader.GetOrdinal("id")),
+            PlaylistId = reader.GetInt64(reader.GetOrdinal("playlist_id")),
+            Name = reader.GetString(reader.GetOrdinal("name")),
+            Singer = reader.GetString(reader.GetOrdinal("singer")),
+            Position = (int)reader.GetInt64(reader.GetOrdinal("position")),
+            SearchJson = searchJson,
+        };
+    }
+
+    private static string PlaylistPlayModeToDb(PlaylistPlayMode mode) => mode switch
+    {
+        PlaylistPlayMode.Sequential => "sequential",
+        PlaylistPlayMode.Shuffle => "shuffle",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+    };
+
+    /// <summary>未知播放模式值容错回默认（读路径容忍，避免库值漂移炸开整页）。</summary>
+    private static PlaylistPlayMode PlaylistPlayModeFromDb(string value) => value switch
+    {
+        "shuffle" => PlaylistPlayMode.Shuffle,
+        _ => PlaylistPlayMode.Sequential,
+    };
+
+    private static string PlaylistSourceToDb(PlaylistSource source) => source switch
+    {
+        PlaylistSource.Local => "local",
+        PlaylistSource.Netease => "netease",
+        PlaylistSource.Qqmusic => "qqmusic",
+        PlaylistSource.Kugou => "kugou",
+        _ => throw new ArgumentOutOfRangeException(nameof(source)),
+    };
+
+    private static PlaylistSource PlaylistSourceFromDb(string value) => value switch
+    {
+        "netease" => PlaylistSource.Netease,
+        "qqmusic" => PlaylistSource.Qqmusic,
+        "kugou" => PlaylistSource.Kugou,
+        _ => PlaylistSource.Local,
+    };
 
     // ---- queueup_entries 域（阶段 5 排队模块）----
 

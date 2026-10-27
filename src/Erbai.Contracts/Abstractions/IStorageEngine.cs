@@ -142,13 +142,60 @@ public interface IStorageEngine : IAsyncDisposable
     /// <summary>整体替换歌曲黑名单（去空行、保序）。</summary>
     Task ReplaceBannedSongsAsync(IReadOnlyList<string> rules, CancellationToken ct = default);
 
-    // ---- idle_playlist 域 ----
+    // ---- playlists 域 ----
 
-    /// <summary>按 position 顺序读出全部空闲歌单。</summary>
-    Task<IReadOnlyList<IdleSong>> LoadIdleSongsAsync(CancellationToken ct = default);
+    /// <summary>全部歌单（空闲播放源置顶，其余按创建序），带联表曲目计数。</summary>
+    Task<IReadOnlyList<Playlist>> ListPlaylistsAsync(CancellationToken ct = default);
 
-    /// <summary>整体替换空闲歌单（保留传入顺序；空歌名条目剔除）。</summary>
-    Task SaveIdleSongsAsync(IReadOnlyList<IdleSong> songs, CancellationToken ct = default);
+    Task<Playlist?> GetPlaylistAsync(long playlistId, CancellationToken ct = default);
+
+    /// <summary>当前空闲播放源歌单（is_idle 标记）；未标记返回 null。</summary>
+    Task<Playlist?> GetIdlePlaylistAsync(CancellationToken ct = default);
+
+    /// <summary>创建歌单（默认本机创建、顺序播放；名称去空白后不得为空；source/sourceId 供导入来源对账）。</summary>
+    Task<Playlist> CreatePlaylistAsync(
+        string name,
+        PlaylistSource source = PlaylistSource.Local,
+        string sourceId = "",
+        CancellationToken ct = default);
+
+    /// <summary>按导入来源 (source, sourceId) 对账查找歌单（重复导入同一平台歌单时覆盖更新）。</summary>
+    Task<Playlist?> FindImportedPlaylistAsync(PlaylistSource source, string sourceId, CancellationToken ct = default);
+
+    /// <summary>清空歌单全部曲目（重导入路径；返回是否存在）。</summary>
+    Task<bool> ClearPlaylistSongsAsync(long playlistId, CancellationToken ct = default);
+
+    /// <summary>重命名（名称去空白后不得为空）；歌单不存在返回 null。</summary>
+    Task<Playlist?> RenamePlaylistAsync(long playlistId, string name, CancellationToken ct = default);
+
+    /// <summary>删除歌单及其全部曲目（单事务）；歌单不存在返回 false。</summary>
+    Task<bool> DeletePlaylistAsync(long playlistId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 标记/取消空闲播放源（全局唯一：标记时自动取消旧标记，取消传 null）；
+    /// playlistId 非空但不存在时返回 null（取消标记的回滚语义由事务保证）。
+    /// </summary>
+    Task<Playlist?> SetIdlePlaylistAsync(long? playlistId, CancellationToken ct = default);
+
+    /// <summary>设置播放模式（顺序/随机）；歌单不存在返回 null。</summary>
+    Task<Playlist?> SetPlayModeAsync(long playlistId, PlaylistPlayMode mode, CancellationToken ct = default);
+
+    /// <summary>按 position 顺序读出歌单曲目。</summary>
+    Task<IReadOnlyList<PlaylistSong>> ListPlaylistSongsAsync(long playlistId, CancellationToken ct = default);
+
+    /// <summary>追加单曲（position = 末尾 +1；空歌名抛 ArgumentException）。</summary>
+    Task<PlaylistSong> AddPlaylistSongAsync(
+        long playlistId, string name, string singer = "", string? searchJson = null, CancellationToken ct = default);
+
+    /// <summary>批量追加（导入路径；单事务；空歌名条目剔除；返回实际插入数）。</summary>
+    Task<int> AddPlaylistSongsAsync(
+        long playlistId, IReadOnlyList<(string Name, string Singer, string? SearchJson)> songs, CancellationToken ct = default);
+
+    /// <summary>删除单曲；不存在返回 false。</summary>
+    Task<bool> RemovePlaylistSongAsync(long songId, CancellationToken ct = default);
+
+    /// <summary>上移/下移单曲（offset -1/+1；越界为无操作；不存在为无操作）。</summary>
+    Task MovePlaylistSongAsync(long playlistId, long songId, int offset, CancellationToken ct = default);
 
     // ---- queueup_entries 域----
 

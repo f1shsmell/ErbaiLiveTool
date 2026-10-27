@@ -2,6 +2,55 @@
 
 > 六轮迭代的完整变更明细。产品当前状态见仓库根 [README](../README.md)。
 
+## 歌单功能轮（2026-10-28）
+
+**多歌单 + 指定空闲播放源（schema v2）**：独立空闲歌单（单表 `idle_playlist_songs` +
+管理页手输四分区）升级为多歌单模型——`playlists` / `playlist_songs` 两表，任意歌单
+可标记为全局唯一的空闲播放源（partial unique index 兜底），播放模式支持顺序/随机
+（随机为洗牌一轮内不重复）。v1→v2 迁移把存量空闲歌单收编为默认歌单"我的空闲歌单"
+并自动标记，老用户升级后空闲轮播行为不变。管理页空闲分区删除，新「歌单」页承载
+CRUD/排序/标记/播放模式；历史页"加入空闲歌单"改为"加入歌单"选择器；设置页显示
+当前空闲播放源并可跳转。
+
+**Worker 空闲播放改接**：`MaybePlayIdleAsync` 从 PlaylistService 语义改为读队列缓存
+的 `IdleSongs`（被标记歌单曲目），轮转逻辑隔离为 `PickNextIdleSong`（顺序指针跨列表
+热更新保留 / 随机洗牌袋）。新增存量候选直派路径：导入时落库的 `search_json`
+（`SongSearchResult` JSON 数组，与点歌 `search_result_json` 同构）播放时跳过实时
+搜索，走与点歌相同的源过滤 + 逐候选派发；缺失/解析失败/全部被拒回退三源搜索。
+被标记歌单删除后热重载自动停转（等同开关关闭）。
+
+**歌单导入（三平台，免登录）**——2026-10-28 逐平台实测定型：
+
+- 网易云：`/api/v6/playlist/detail`（POST form，匿名可取全量 tracks，新格式
+  `ar`/`dt`/`al` 字段；旧 `/api/playlist/detail` 已不再返回 tracks）。
+  匿名「昵称搜用户」已被风控（`/api/search/get/web` type=1002 与 weapi 全系均空），
+  改为**用户主页链接/UID → `/api/user/playlist/`**（匿名可用，more 分页）拉取其
+  公开歌单后挑选导入。
+- QQ 音乐：桌面 UA + c.y.qq.com 老路径已被 "check privacy error" 拦截、musicu.fcg
+  新模块（PlaylistSonglist 等）匿名 500003 要登录；**移动端 qzone-music 变体
+  （`i.y.qq.com/qzone-music/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg` + 手机 UA）
+  匿名可取全量**（实测 1283 首单次返回，无 30 首截断）。候选与搜索产物同构
+  （songmid/songid/songtype/strMediaMid，QQ 原生插队可用）。
+- 酷狗：`mobilecdn.kugou.com/api/v3/special/info|song`（免签名匿名分页；musicdl
+  走的 gatewayretry 端点带 MD5 签名，无必要）。曲目行仅 `filename`（"歌手 - 歌名"），
+  按首个 " - " 拆分。
+- 分享链接解析（`ShareLinkParser`）：从分享文案提取 URL，识别网易云长链/163cn.tv
+  短链/用户主页、QQ 新旧链接与 c6 短链、酷狗 specialid/plist/special-single/t1 短链；
+  短链经 `ShortLinkResolver` 手动跟随重定向（Location → 最终 URL → 响应体兜底）。
+- 落库去重：SongKey 归一化同歌单去重；按 (source, source_id) 对账——重复导入同一
+  平台歌单覆盖更新（曲目替换、空闲标记/播放模式保留、不产生重复歌单）。
+
+**实测验证**（scratch console 走真实客户端代码）：网易云热歌榜 200 首全量、用户
+uid=1 公开歌单 848 个分页拉取、QQ 歌单 66 首全量、酷狗 417 首翻页完整，歌名/歌手/
+平台 ID 全部正确。真机分享短链（163cn.tv / c6.y.qq.com / t1.kugou.com）解析链路有
+单测覆盖（302 链 + HTML 兜底），待用户实际分享链接复核。
+
+**测试**：新增迁移测试（v1 库收编/空表仍建默认歌单）、playlists 域 CRUD/唯一空闲
+标记/级联删除/排序交换/来源对账、导入解析与客户端 fake-handler 全链路、去重对账、
+随机模式一轮全覆盖、存量候选免搜索、删除标记停转；重写空闲播放 E2E。全量 975 个
+测试通过。实现过程中修掉两个真 bug：`MovePlaylistSongAsync` 单条 CASE 子查询交换
+被 SQLite 逐行求值吞掉（改读序后显式回写）、酷狗分页 total 与页满启发式冲突。
+
 ## 必要性审查与精简轮
 
 **必要性审查结论**（三路审计：依赖图 / 死代码 grep 验证 / 重复逻辑）：

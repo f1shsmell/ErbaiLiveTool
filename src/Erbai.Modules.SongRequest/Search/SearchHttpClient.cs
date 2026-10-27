@@ -15,11 +15,12 @@ public sealed class SearchHttpClient : IDisposable
 
     private readonly HttpClient _http;
 
-    public SearchHttpClient(HttpMessageHandler? handler = null, TimeSpan? timeout = null)
+    /// <param name="userAgent">覆盖默认桌面 UA（歌单导入的 QQ 移动端端点要求手机 UA）。</param>
+    public SearchHttpClient(HttpMessageHandler? handler = null, TimeSpan? timeout = null, string? userAgent = null)
     {
         _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.Timeout = timeout ?? TimeSpan.FromSeconds(10);
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent ?? UserAgent);
     }
 
     /// <summary>GET JSON：返回响应体文本；非 200 返回 null（不算失败，由调用方当无结果）。</summary>

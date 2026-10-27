@@ -20,16 +20,13 @@ public class IdleHotEnableTests
     private static async Task<(SqliteStorageEngine Store, EventBus Bus, SongQueueService Queue, FakePlayer Player)>
         CreateDisabledIdleQueueAsync()
     {
-        // 空闲歌单默认关闭（Enabled=false），但歌曲列表已备好
+        // 空闲歌单默认关闭（Enabled=false），但空闲播放源歌单已标记好、歌曲列表已备好
         var harness = await TestHarness.CreateAsync(TestHarness.DefaultConfig());
         var player = new FakePlayer();
         harness.Queue.Player = player;
         harness.Queue.Processor = SearchHarness.Fixed();
-        await harness.Store.SaveIdleSongsAsync(new[]
-        {
-            new IdleSong { Name = "晴天", Singer = "周杰伦" },
-            new IdleSong { Name = "海阔天空", Singer = "Beyond" },
-        });
+        await TestHarness.SeedIdlePlaylistAsync(
+            harness.Store, ("晴天", "周杰伦"), ("海阔天空", "Beyond"));
         // 收到 PlaySelected 才报 playing，两帧后 stopped——等待结束跟踪需要"播完"信号
         var probes = 0;
         player.ProbeFunc = () =>
@@ -82,7 +79,7 @@ public class IdleHotEnableTests
         var player = new FakePlayer();
         queue.Player = player;
         queue.Processor = SearchHarness.Fixed();
-        await store.SaveIdleSongsAsync(new[] { new IdleSong { Name = "晴天", Singer = "周杰伦" } });
+        await TestHarness.SeedIdlePlaylistAsync(store, ("晴天", "周杰伦"));
         await queue.StartAsync();
 
         var (request, decision) = await queue.SubmitAsync(TestHarness.NewRequest("光辉岁月", userId: "u1"));

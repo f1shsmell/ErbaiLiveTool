@@ -18,6 +18,7 @@ using Erbai.Live.Bilibili.Protocol;
 using Erbai.Live.Douyin;
 using Erbai.Live.Douyin.Hosting;
 using Erbai.Live.Douyin.Services;
+using Erbai.Modules.SongRequest.Import;
 using Erbai.Modules.SongRequest.Search;
 using Erbai.Modules.SongRequest.Services;
 using Erbai.Player.Connectors;
@@ -79,6 +80,12 @@ public sealed class AppServices : IAsyncDisposable
     public SongBlacklist Blacklist => _provider.GetRequiredService<SongBlacklist>();
 
     public SearchCoordinator Search => _provider.GetRequiredService<SearchCoordinator>();
+
+    /// <summary>歌单导入编排（分享链接解析 + 分平台客户端 + 去重落库）。</summary>
+    public PlaylistImporter PlaylistImport => _provider.GetRequiredService<PlaylistImporter>();
+
+    /// <summary>网易云歌单客户端（链接导入 + 用户主页公开歌单列表）。</summary>
+    public NeteasePlaylistClient NeteasePlaylist => _provider.GetRequiredService<NeteasePlaylistClient>();
 
     /// <summary>连接器播放器（连接器 exe 缺失时为 null，队列走 fallback 时长；设置页切换播放器时热替换）。</summary>
     public ConnectorPlayerPlugin? Player { get => _player; private set => _player = value; }
@@ -265,6 +272,19 @@ public sealed class AppServices : IAsyncDisposable
             new SearchHttpClient(),
             sp.GetRequiredService<ConfigStore>().Settings.Providers.Enabled,
             sp.GetRequiredService<ConfigStore>().Settings.Search.PreferHot));
+        // 歌单导入（P1）：网易云 v6 / QQ 移动端 qzone / 酷狗 mobilecdn v3，全部匿名。
+        // QQ 客户端必须用手机 UA（桌面 UA 被 privacy check 拦截）——见 QqPlaylistClient。
+        services.AddSingleton(sp => new NeteasePlaylistClient(new SearchHttpClient()));
+        services.AddSingleton(sp => new QqPlaylistClient(new SearchHttpClient(userAgent: QqPlaylistClient.MobileUserAgent)));
+        services.AddSingleton(sp => new KugouPlaylistClient(new SearchHttpClient()));
+        services.AddSingleton(sp => new PlaylistImporter(
+            sp.GetRequiredService<IStorageEngine>(),
+            new IPlaylistImportClient[]
+            {
+                sp.GetRequiredService<NeteasePlaylistClient>(),
+                sp.GetRequiredService<QqPlaylistClient>(),
+                sp.GetRequiredService<KugouPlaylistClient>(),
+            }));
         services.AddSingleton<SongRequestService>();
         services.AddSingleton<UserService>();
 

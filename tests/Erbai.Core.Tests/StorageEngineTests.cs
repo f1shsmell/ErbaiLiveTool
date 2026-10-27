@@ -42,7 +42,7 @@ public class StorageEngineTests
     }
 
     [Fact]
-    public async Task Open_CreatesFile_WithSchemaVersion1()
+    public async Task Open_CreatesFile_WithCurrentSchemaVersion()
     {
         var path = TempDb();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -51,9 +51,9 @@ public class StorageEngineTests
 
         Assert.True(File.Exists(path));
         using var connection = OpenRaw(path);
-        Assert.Equal("1", QueryScalar(connection, "SELECT value FROM schema_meta WHERE key = 'schema_version'"));
+        Assert.Equal(SqliteStorageEngine.SchemaVersion.ToString(), QueryScalar(connection, "SELECT value FROM schema_meta WHERE key = 'schema_version'"));
 
-        // 全部 v1 表已建
+        // 全部当前版本表已建
         var tables = new List<string>();
         using (var command = connection.CreateCommand())
         {
@@ -70,7 +70,8 @@ public class StorageEngineTests
         Assert.Contains("queue_events", tables);
         Assert.Contains("banned_users", tables);
         Assert.Contains("banned_songs", tables);
-        Assert.Contains("idle_playlist_songs", tables);
+        Assert.Contains("playlists", tables);
+        Assert.Contains("playlist_songs", tables);
         Assert.Contains("queueup_entries", tables);
         Assert.Contains("schema_meta", tables);
     }

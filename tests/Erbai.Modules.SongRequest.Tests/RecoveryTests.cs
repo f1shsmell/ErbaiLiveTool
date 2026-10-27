@@ -84,10 +84,10 @@ public class RecoveryTests
     [Fact]
     public async Task Start_WhenInitFails_ResetsStartedFlag_SoRetrySucceeds()
     {
-        // H2 回归：_started 在初始化前置位——LoadIdleSongs/Recover 抛异常后
+        // H2 回归：_started 在初始化前置位——空闲播放源解析/Recover 抛异常后
         // 队列永久死亡（后续 Start 全 no-op、请求写入无人消费的 pending）
         var (store, bus, logs, _, queue, _, _) = await TestHarness.CreateAsync();
-        await store.CloseAsync(); // 存储关闭 → LoadIdleSongsAsync 确定性抛错
+        await store.CloseAsync(); // 存储关闭 → GetIdlePlaylistAsync 确定性抛错
 
         await Assert.ThrowsAnyAsync<Exception>(() => queue.StartAsync());
         Assert.False(queue.IsStarted); // 必须复位，否则整个会话点歌失效

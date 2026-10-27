@@ -15,46 +15,9 @@
         </Grid.RowDefinitions>
 
         <ux:PageHeader Icon="Admin" Title="管理"
-                       Subtitle="空闲歌单、歌曲黑名单、用户黑名单与管理员；改动立即写盘并热生效" />
+                       Subtitle="歌曲黑名单、用户黑名单与管理员；改动立即写盘并热生效（空闲播放源在「歌单」页标记）" />
 
         <Pivot Grid.Row="1" Style="{StaticResource AppPivotStyle}">
-            <!-- 空闲歌单 -->
-            <PivotItem Header="空闲歌单">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
-                <StackPanel Spacing="8">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox x:Name="IdleNameBox" PlaceholderText="歌名" Width="220" />
-                        <TextBox x:Name="IdleSingerBox" PlaceholderText="歌手（可选）" Width="160" />
-                        <Button Content="添加" Click="OnAddIdle" />
-                        <TextBlock x:Name="IdleStatus" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                    </StackPanel>
-                    <TextBlock Text="队列空时自动轮播这些歌（设置页可开关与调间隔）；改动立即保存并生效。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" />
-                    <ListView x:Name="IdleList" MaxHeight="380">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="storage:IdleSong">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{x:Bind Singer}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                                        <Button Content="↑" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveIdleUp" />
-                                        <Button Content="↓" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveIdleDown" />
-                                        <Button Content="删除" Style="{StaticResource InlineActionButtonStyle}" Click="OnRemoveIdle" />
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <TextBlock x:Name="IdleEmptyText" Text="空闲歌单为空——添加歌曲后，队列空时会自动轮播。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" />
-                </StackPanel>
-                </ScrollViewer>
-            </PivotItem>
-
             <!-- 歌曲黑名单 -->
             <PivotItem Header="歌曲黑名单">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">

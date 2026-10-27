@@ -16,15 +16,18 @@ namespace Erbai.Modules.SongRequest
 /// 不变量：任何异常都不得逃逸 worker——必须显式结算当前请求为 failed 并继续
 /// 循环，否则整个队列永久停摆。
 ///
-/// 空闲歌单为新设计（旧 _maybe_play_idle 不复用，参考 JMusicBot defaultQueue
-/// 机制 + 修复旧版缺陷）：
+/// 空闲播放（参考 JMusicBot defaultQueue 机制 + 修复旧版缺陷）：
 /// 1. 触发 = 请求队列空（无 active 请求且 pending 空），不是轮询队列长度；
-/// 2. 空闲歌单与请求队列分离（不写 song_requests 表，不污染点歌队列/历史）；
-/// 3. 顺序轮转，播完一首后等 play_interval 再播下一首（旧版是开播后等
-///     interval，歌未播完就被切——间隔语义修正）；
+/// 2. 播放来源 = 「歌单」页标记的空闲播放源歌单（全局唯一 is_idle），数据与
+///    点歌队列完全分离（不写 song_requests 表，不污染点歌队列/历史）；
+/// 3. 轮转顺序由该歌单的 play_mode 决定：顺序轮转（跨列表热更新保留指针）/
+///     随机（洗牌一轮内不重复，热更新重洗）；播完一首后等 play_interval 再播
+///     下一首（旧版是开播后等 interval，歌未播完就被切——间隔语义修正）；
 /// 4. 新请求到达立即打断空闲播放（SignalIdleWakeup，worker 切去派发点歌）；
 /// 5. 播放失败跳过该歌继续下一首；连续失败达阈值暂停一段时间（防死循环
-///    刷播放器，旧版失败只记日志照样空转是反例）。
+///    刷播放器，旧版失败只记日志照样空转是反例）；
+/// 6. 曲目带导入时落库的存量候选（search_json）时跳过实时搜索，直接走与
+///    点歌相同的源过滤 + 逐候选派发；缺失/失败回退三源实时搜索。
 /// </summary>
 internal static class Worker
 {
@@ -33,9 +36,14 @@ internal static class Worker
 
     private sealed class IdleState
     {
-        public int Index;
         public bool Waiting;
         public int ConsecutiveFailures;
+        /// <summary>顺序轮转指针（跨列表热更新保留：新歌单从轮转位置继续）。</summary>
+        public int SequentialIndex;
+        /// <summary>随机洗牌袋 + 袋内指针（热更新版本变化时重洗）。</summary>
+        public List<Erbai.Contracts.Storage.PlaylistSong> ShuffleBag = [];
+        public int ShuffleIndex;
+        public int ReloadVersionSeen;
     }
 
     public static async Task RunAsync(SongQueueService queue, CancellationToken ct)
@@ -373,9 +381,19 @@ internal static class Worker
         }
 
         var songs = queue.IdleSongs;
+
+        // 歌单热更新版本对账：随机模式重洗牌袋；顺序模式保留指针（新列表从
+        // 轮转位置继续）。必须在任何提前 return 之前对账，否则版本号永远追不上
+        if (state.ReloadVersionSeen != queue.IdleReloadVersion)
+        {
+            state.ReloadVersionSeen = queue.IdleReloadVersion;
+            state.ShuffleBag.Clear();
+            state.ShuffleIndex = 0;
+        }
+
         if (songs.Count == 0)
         {
-            // 空闲歌单为空（或已清空）：队列无事可做时要挂起播放器，
+            // 未标记空闲播放源（或歌单为空）：队列无事可做时要挂起播放器，
             // 否则最后一首空闲歌会无限继续放（历史修复记录 #14）
             await queue.PausePlayerWhenIdleAsync(ct);
             return false;
@@ -401,8 +419,7 @@ internal static class Worker
             return true;
         }
 
-        var song = songs[state.Index % songs.Count];
-        state.Index++;
+        var song = PickNextIdleSong(queue, state, songs);
         var (ok, result) = await PlayIdleSongAsync(queue, song, ct);
         if (!ok)
         {
@@ -562,15 +579,77 @@ internal static class Worker
     private const int PlaybackBufferSeconds = 60;
 
     /// <summary>
-    /// 播放一首空闲歌：走与点歌相同的搜索路径（三源），取第一候选派发给
-    /// 播放器；失败返回 false（调用方跳过该歌）。空闲歌不写 song_requests
-    /// 表、不设 _current_request_id（不占队列、不参与历史/快照）。
+    /// 取下一首空闲歌：随机模式（歌单 play_mode=shuffle 且曲目多于 1）走洗牌袋
+    /// ——一轮内不重复，轮尽重洗；顺序模式按 position 轮转（取模兼容列表增减）。
+    /// </summary>
+    private static Erbai.Contracts.Storage.PlaylistSong PickNextIdleSong(
+        SongQueueService queue, IdleState state, IReadOnlyList<Erbai.Contracts.Storage.PlaylistSong> songs)
+    {
+        if (queue.IdlePlaylist?.PlayMode == Erbai.Contracts.Storage.PlaylistPlayMode.Shuffle && songs.Count > 1)
+        {
+            if (state.ShuffleIndex >= state.ShuffleBag.Count)
+            {
+                state.ShuffleBag = ShuffleSongs(songs);
+                state.ShuffleIndex = 0;
+            }
+
+            return state.ShuffleBag[state.ShuffleIndex++];
+        }
+
+        var song = songs[state.SequentialIndex % songs.Count];
+        state.SequentialIndex++;
+        return song;
+    }
+
+    private static List<Erbai.Contracts.Storage.PlaylistSong> ShuffleSongs(
+        IReadOnlyList<Erbai.Contracts.Storage.PlaylistSong> songs)
+    {
+        var bag = songs.ToList();
+        for (var i = bag.Count - 1; i > 0; i--)
+        {
+            var j = Random.Shared.Next(i + 1);
+            (bag[i], bag[j]) = (bag[j], bag[i]);
+        }
+
+        return bag;
+    }
+
+    /// <summary>
+    /// 播放一首空闲歌：优先命中导入时落库的存量候选（search_json，跳过实时
+    /// 搜索，走与点歌相同的源过滤 + 逐候选派发）；缺失/解析失败/全部被拒时
+    /// 回退三源实时搜索取第一候选。失败返回 false（调用方跳过该歌）。空闲歌
+    /// 不写 song_requests 表、不设 _current_request_id（不占队列、不参与历史/快照）。
     /// </summary>
     private static async Task<(bool Ok, SongSearchResult? Result)> PlayIdleSongAsync(
-        SongQueueService queue, IdleSong song, CancellationToken ct)
+        SongQueueService queue, Erbai.Contracts.Storage.PlaylistSong song, CancellationToken ct)
     {
         try
         {
+            var player = queue.Player;
+
+            var stored = TryDeserializeStoredCandidates(song.SearchJson);
+            if (stored is { Count: > 0 })
+            {
+                var playable = FilterPlayableCandidates(player, stored);
+                if (playable.Count > 0)
+                {
+                    if (player is null)
+                    {
+                        queue.LogWarning($"空闲歌单播放失败（播放器未接入）：{song.Name}");
+                        return (false, null);
+                    }
+
+                    var (accepted, acceptedIndex) = await DispatchFirstCandidateAsync(queue, playable, ct);
+                    if (accepted)
+                    {
+                        queue.LogInfo($"空闲歌单播放（存量候选）：{song.Name} - {song.Singer}");
+                        return (true, playable[acceptedIndex]);
+                    }
+
+                    queue.LogWarning($"空闲歌单存量候选全部被拒，回退实时搜索：{song.Name}");
+                }
+            }
+
             var processor = queue.Processor;
             if (processor is null)
             {
@@ -592,7 +671,6 @@ internal static class Worker
                 return (false, null);
             }
 
-            var player = queue.Player;
             if (player is null)
             {
                 queue.LogWarning($"空闲歌单播放失败（播放器未接入）：{song.Name}");
@@ -618,6 +696,24 @@ internal static class Worker
         {
             queue.LogWarning($"空闲歌单播放失败：{ex.Message}");
             return (false, null);
+        }
+    }
+
+    /// <summary>存量候选反序列化：坏 JSON 不打断空闲循环，回退实时搜索。</summary>
+    private static IReadOnlyList<SongSearchResult>? TryDeserializeStoredCandidates(string? searchJson)
+    {
+        if (string.IsNullOrWhiteSpace(searchJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<SongSearchResult>>(searchJson);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
         }
     }
 

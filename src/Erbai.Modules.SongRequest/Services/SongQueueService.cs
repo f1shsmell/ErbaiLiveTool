@@ -452,12 +452,17 @@ public sealed class SongQueueService
     private Task? _workerTask;
     private int _lastRecovered;
 
-    /// <summary>空闲歌单（从存储加载；ReloadIdleSongsAsync 热更新）。</summary>
-    public IReadOnlyList<Erbai.Contracts.Storage.IdleSong> IdleSongs { get; private set; } = [];
+    /// <summary>空闲播放源歌单（从存储加载；ReloadIdlePlaylistAsync 热更新）。null = 未标记。</summary>
+    public Erbai.Contracts.Storage.Playlist? IdlePlaylist { get; private set; }
+
+    /// <summary>
+    /// 空闲播放歌单曲目（指定歌单按 position 顺序；未标记/空歌单为空列表）。
+    /// </summary>
+    public IReadOnlyList<Erbai.Contracts.Storage.PlaylistSong> IdleSongs { get; private set; } = [];
 
     private int _idleReloadVersion;
 
-    /// <summary>空闲歌单热更新版本（ReloadIdleSongsAsync 递增；Worker 据此在
+    /// <summary>空闲歌单热更新版本（ReloadIdlePlaylistAsync 递增；Worker 据此在
     /// 播放被打断后跳过 play_interval 立即按新列表继续）。</summary>
     internal int IdleReloadVersion => Interlocked.CompareExchange(ref _idleReloadVersion, 0, 0);
 
@@ -495,7 +500,7 @@ public sealed class SongQueueService
         _started = true;
         try
         {
-            IdleSongs = await _store.LoadIdleSongsAsync(ct);
+            await LoadIdlePlaylistCoreAsync(ct);
             await RecoverAsync(ct);
         }
         catch
@@ -512,11 +517,26 @@ public sealed class SongQueueService
         await EmitAsync("queue.started", new QueueEventData { Recovered = _lastRecovered }, ct);
     }
 
-    /// <summary>热更新空闲歌单（保存后立即生效无需重启；新歌单从轮转位置继续）。</summary>
-    public async Task ReloadIdleSongsAsync(IReadOnlyList<Erbai.Contracts.Storage.IdleSong> songs, CancellationToken ct = default)
+    /// <summary>
+    /// 从存储解析空闲播放源并缓存其曲目（启动与热更新共用；未标记/已删标记时
+    /// IdlePlaylist 为 null、IdleSongs 为空——空闲循环按"无空闲歌"处理）。
+    /// </summary>
+    private async Task LoadIdlePlaylistCoreAsync(CancellationToken ct)
     {
-        IdleSongs = songs;
-        await _store.SaveIdleSongsAsync(songs, ct);
+        IdlePlaylist = await _store.GetIdlePlaylistAsync(ct);
+        IdleSongs = IdlePlaylist is null
+            ? []
+            : await _store.ListPlaylistSongsAsync(IdlePlaylist.Id, ct);
+    }
+
+    /// <summary>
+    /// 歌单数据（曲目增删改/排序/标记切换）变化后从存储重载空闲播放源，
+    /// 立即生效无需重启；递增热更新版本并唤醒 worker（打断播放中的空闲歌，
+    /// 立即按新列表继续轮转）。
+    /// </summary>
+    public async Task ReloadIdlePlaylistAsync(CancellationToken ct = default)
+    {
+        await LoadIdlePlaylistCoreAsync(ct);
         Interlocked.Increment(ref _idleReloadVersion);
         SignalIdleWakeup();
     }

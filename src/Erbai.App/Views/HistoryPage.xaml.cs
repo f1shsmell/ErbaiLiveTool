@@ -12,8 +12,8 @@ namespace Erbai.App.Views;
 /// <summary>
 /// 历史页（两个分区）：点歌历史（song_requests 全量，含 rejected）与排队历史（queueup 终态）。
 /// 数据来自 SQL 分页查询（ListRequestsPageAsync / ListQueueUpHistoryPageAsync），不整表载入。
-/// 快捷操作：加入空闲歌单 / 拉黑歌曲 / 设为管理员——全部复用 AdminPage 同款服务，
-/// 写盘即热生效；解除类操作（移出歌单/解除拉黑/取消管理员）仍留在管理页。
+/// 快捷操作：加入播放队列 / 加入歌单 / 拉黑歌曲 / 设为管理员——全部复用同款服务，
+/// 写盘即热生效；解除类操作（歌单编辑/解除拉黑/取消管理员）分别留在歌单页与管理页。
 /// 行 UI 在 code-behind 构建并直接作为列表项（代码行模式）：本页两个列表的 DataTemplate
 /// 若用 x:DataType + x:Bind 会触发 XamlCompiler（WASDK 1.8）WMC9999 codegen 崩溃；
 /// 按钮 Click 闭包直接捕获领域对象。
@@ -129,7 +129,7 @@ public sealed partial class HistoryPage : Page
         return button;
     }
 
-    /// <summary>行内文本按钮（空闲歌单的"+"用文本而非字形，直观且无歧义）。</summary>
+    /// <summary>行内文本按钮（历史行的"+"用文本而非字形，直观且无歧义）。</summary>
     private static Button TextButton(string text, string tooltip, RoutedEventHandler onClick)
     {
         var button = new Button
@@ -184,7 +184,7 @@ public sealed partial class HistoryPage : Page
             VerticalAlignment = VerticalAlignment.Center,
         };
         actions.Children.Add(IconButton("\uE768", "加入播放队列", (_, _) => _ = QueueFromHistoryAsync(song)));
-        actions.Children.Add(TextButton("+", "加入空闲歌单", (_, _) => _ = AddIdleFromHistoryAsync(song)));
+        actions.Children.Add(TextButton("+", "加入歌单", (_, _) => _ = AddToPlaylistAsync(song)));
         actions.Children.Add(IconButton("\uE783", "拉黑歌曲", (_, _) => _ = BanSongFromHistoryAsync(song)));
         root.Children.Add(actions);
         Grid.SetColumn(actions, 4);
@@ -395,20 +395,122 @@ public sealed partial class HistoryPage : Page
         }
     }
 
-    /// <summary>把该点歌记录追加到空闲歌单末尾并热生效（AdminPage 同款 ReloadIdleSongsAsync 流程）。</summary>
-    private async Task AddIdleFromHistoryAsync(SongRequest song)
+    /// <summary>
+    /// 把该点歌记录加入歌单（PlaylistPage 同款存储路径）：弹歌单选择器，默认选中
+    /// 当前空闲播放源，也可输入名称现场建一个；加入后热重载空闲播放源。
+    /// 选择器沿用本页"code-behind 构建行 UI"模式（x:Bind 模板会触发 WMC9999）。
+    /// </summary>
+    private async Task AddToPlaylistAsync(SongRequest song)
     {
         try
         {
-            var idle = (await App.Services.Storage.LoadIdleSongsAsync()).ToList();
-            idle.Add(new IdleSong { Name = song.SongName, Singer = song.Singer });
-            await App.Services.Queue.ReloadIdleSongsAsync(idle);
-            StatusText.Text = $"已把「{song.SongName}」加入空闲歌单";
+            var playlists = await App.Services.Storage.ListPlaylistsAsync();
+
+            var list = new ListView
+            {
+                SelectionMode = ListViewSelectionMode.Single,
+                MaxHeight = 220,
+            };
+            ListViewItem? preselect = null;
+            foreach (var playlist in playlists)
+            {
+                var item = new ListViewItem
+                {
+                    Tag = playlist,
+                    Content = BuildPickerRow(playlist),
+                    MinHeight = 36,
+                    Padding = new Thickness(8, 4, 8, 4),
+                };
+                list.Items.Add(item);
+                // 默认选中空闲播放源；没有则选第一个
+                if (playlist.IsIdle || preselect is null)
+                {
+                    preselect = item;
+                }
+            }
+
+            var newNameBox = new TextBox { PlaceholderText = "或输入名称新建歌单…（填写则优先）" };
+            var panel = new StackPanel { Spacing = 10 };
+            if (playlists.Count > 0)
+            {
+                panel.Children.Add(list);
+                list.SelectedItem = preselect;
+            }
+            else
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "还没有歌单：输入名称新建一个；加入后可到「歌单」页标记为空闲播放源。",
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            }
+
+            panel.Children.Add(newNameBox);
+            var dialog = new ContentDialog
+            {
+                Title = $"把「{song.SongName}」加入歌单",
+                Content = panel,
+                PrimaryButtonText = "加入",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            Playlist target;
+            var newName = newNameBox.Text.Trim();
+            if (newName.Length > 0)
+            {
+                target = await App.Services.Storage.CreatePlaylistAsync(newName);
+            }
+            else if ((list.SelectedItem as ListViewItem)?.Tag is Playlist picked)
+            {
+                target = picked;
+            }
+            else
+            {
+                StatusText.Text = "未选择歌单";
+                return;
+            }
+
+            await App.Services.Storage.AddPlaylistSongAsync(target.Id, song.SongName, song.Singer);
+            await App.Services.Queue.ReloadIdlePlaylistAsync();
+            StatusText.Text = $"已把「{song.SongName}」加入歌单「{target.Name}」";
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"加入空闲歌单失败：{ex.Message}";
+            StatusText.Text = $"加入歌单失败：{ex.Message}";
         }
+    }
+
+    /// <summary>歌单选择器行：名称 + 来源/曲数摘要 + 空闲播放源标记。</summary>
+    private static StackPanel BuildPickerRow(Playlist playlist)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        row.Children.Add(new TextBlock { Text = playlist.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock
+        {
+            Text = $"{playlist.SongCount} 首",
+            FontSize = 12,
+            Opacity = 0.7,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (playlist.IsIdle)
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = "空闲播放源",
+                FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+
+        return row;
     }
 
     /// <summary>按歌名加入歌曲黑名单（精确规则，弹幕侧立即生效；重复规则由 AddRuleAsync 幂等返回）。</summary>
