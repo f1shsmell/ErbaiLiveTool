@@ -158,6 +158,7 @@ public class ConnectorClientTests
         await client.ActivateAsync(CancellationToken.None);
 
         client.Process!.Kill(entireProcessTree: true);
+        await client.Process!.WaitForExitAsync(CancellationToken.None);
         var sw = Stopwatch.StartNew();
         var tasks = Enumerable.Range(0, 4)
             .Select(_ => client.ProbeAsync(CancellationToken.None))

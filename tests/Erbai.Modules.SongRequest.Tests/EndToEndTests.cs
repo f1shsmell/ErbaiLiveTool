@@ -145,10 +145,7 @@ public class EndToEndTests
             },
         };
         var (store, queue, commands, player) = await CreateE2eAsync(config);
-        await store.SaveIdleSongsAsync(new[]
-        {
-            new Erbai.Contracts.Storage.IdleSong { Name = "晴天", Singer = "周杰伦" },
-        });
+        await TestHarness.SeedIdlePlaylistAsync(store, ("晴天", "周杰伦"));
         // 空闲歌播放也要开播确认脚本(PlaySelected 后报 playing)
         var probes = 0;
         player.ProbeFunc = () =>
@@ -186,10 +183,7 @@ public class EndToEndTests
             },
         };
         var (store, queue, commands, player) = await CreateE2eAsync(config);
-        await store.SaveIdleSongsAsync(new[]
-        {
-            new Erbai.Contracts.Storage.IdleSong { Name = "晴天", Singer = "周杰伦" },
-        });
+        await TestHarness.SeedIdlePlaylistAsync(store, ("晴天", "周杰伦"));
         var probes = 0;
         player.ProbeFunc = () =>
         {

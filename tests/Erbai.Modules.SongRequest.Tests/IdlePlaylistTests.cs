@@ -13,9 +13,9 @@ namespace Erbai.Modules.SongRequest.Tests
     using SongRequest = Erbai.Contracts.Requests.SongRequest;
 
 /// <summary>
-/// 空闲歌单（新设计，不复用旧 _maybe_play_idle；参考 JMusicBot defaultQueue）：
-/// 队列空才播、顺序轮转、播完等 play_interval（旧版"开播后等"会切掉未播完的
-/// 歌）、新点歌立即打断、失败跳过 + 连续失败暂停、不写 song_requests 表。
+/// 空闲播放（指定歌单为空闲播放源）：队列空才播、顺序轮转/随机、播完等
+/// play_interval（旧版"开播后等"会切掉未播完的歌）、新点歌立即打断、失败跳过 +
+/// 连续失败暂停、不写 song_requests 表；曲目带存量候选（search_json）时跳过搜索。
 /// </summary>
 public class IdlePlaylistTests
 {
@@ -26,18 +26,15 @@ public class IdlePlaylistTests
         IdlePlaylist = new IdlePlaylistConfig { Enabled = true, PlayInterval = ShortIntervalSeconds },
     };
 
-    private static async Task<(SqliteStorageEngine Store, EventBus Bus, SongQueueService Queue, FakePlayer Player)>
+    private static async Task<(SqliteStorageEngine Store, EventBus Bus, SongQueueService Queue, FakePlayer Player, long PlaylistId)>
         CreateIdleQueueAsync(AppConfig? config = null, Func<SongRequest, CancellationToken, Task<IReadOnlyList<SongSearchResult>?>>? processor = null)
     {
         var harness = await TestHarness.CreateAsync(config ?? IdleConfig());
         var player = new FakePlayer();
         harness.Queue.Player = player;
         harness.Queue.Processor = processor ?? SearchHarness.Fixed();
-        await harness.Store.SaveIdleSongsAsync(new[]
-        {
-            new IdleSong { Name = "晴天", Singer = "周杰伦" },
-            new IdleSong { Name = "海阔天空", Singer = "Beyond" },
-        });
+        var playlistId = await TestHarness.SeedIdlePlaylistAsync(
+            harness.Store, ("晴天", "周杰伦"), ("海阔天空", "Beyond"));
         // 默认播放脚本：收到 PlaySelected 才报 playing（命令驱动），几帧后
         // 播完(stopped)——空闲歌播放跟踪(WaitIdleSongEndAsync)需要"结束"信号
         if (player.ProbeFunc is null)
@@ -59,13 +56,13 @@ public class IdlePlaylistTests
         }
 
         await harness.Queue.StartAsync();
-        return (harness.Store, harness.Bus, harness.Queue, player);
+        return (harness.Store, harness.Bus, harness.Queue, player, playlistId);
     }
 
     [Fact]
     public async Task Idle_QueueEmpty_PlaysNextIdleSongInOrder()
     {
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
 
         // 队列空 → 播第一首空闲歌
@@ -85,7 +82,7 @@ public class IdlePlaylistTests
     [Fact]
     public async Task Idle_NewRequest_WakesAndCutsIn()
     {
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 1));
         var idleCount = player.Executed.Count;
@@ -119,7 +116,7 @@ public class IdlePlaylistTests
             return SearchHarness.Fixed()(request, CancellationToken.None);
         };
 
-        var (store, bus, queue, player) = await CreateIdleQueueAsync(processor: flakyProcessor);
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync(processor: flakyProcessor);
         using var sub = bus.Subscribe<QueueEventEnvelope>();
 
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 1, 5000));
@@ -129,7 +126,7 @@ public class IdlePlaylistTests
     [Fact]
     public async Task Idle_PlayerRejects_PausesAfterConsecutiveFailures()
     {
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
         player.Outcome = PlayerOutcome.Rejected; // 播放器拒绝一切
 
@@ -148,7 +145,7 @@ public class IdlePlaylistTests
     {
         // 高危修复回归：此前"开播后等 interval"会在 ~2×interval 处切掉未播完的
         // 长歌；现在跟踪播放直到结束（stopped）才播下一首
-        var (store, bus, queue, player) = await CreateIdleQueueAsync(); // interval=1s
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync(); // interval=1s
         using var sub = bus.Subscribe<Erbai.Contracts.Queue.QueueEventEnvelope>();
 
         // 命令驱动：收到 PlaySelected 前报 idle；之后一直 playing（长歌 4 分钟）
@@ -213,11 +210,31 @@ public class IdlePlaylistTests
         var player = new FakePlayer();
         queue.Player = player;
         queue.Processor = SearchHarness.Fixed();
-        await store.SaveIdleSongsAsync(new[] { new IdleSong { Name = "晴天", Singer = "周杰伦" } });
+        await TestHarness.SeedIdlePlaylistAsync(store, ("晴天", "周杰伦"));
         await queue.StartAsync();
 
         await Task.Delay(300);
         Assert.Empty(player.Executed);
+    }
+
+    [Fact]
+    public async Task Idle_NoMarkedPlaylist_DoesNotPlay()
+    {
+        // 开关开着但没有任何歌单被标记为空闲播放源：不播（等同关闭）
+        var harness = await TestHarness.CreateAsync(IdleConfig());
+        var player = new FakePlayer();
+        harness.Queue.Player = player;
+        harness.Queue.Processor = SearchHarness.Fixed();
+        // 只建歌单不标记
+        await harness.Store.CreatePlaylistAsync("未标记的歌单");
+        await harness.Queue.StartAsync();
+
+        await Task.Delay(400);
+        // 不播歌即达标；PausePlayerWhenIdleAsync 会向播放器发 Pause（挂起语义，
+        // 历史修复记录 #14）——只断言没有 PlaySelected
+        Assert.DoesNotContain(player.ExecutedSnapshot(), e => e.Command == PlayerCommand.PlaySelected);
+        Assert.Null(harness.Queue.IdlePlaylist);
+        Assert.Empty(harness.Queue.IdleSongs);
     }
 
     [Fact]
@@ -227,7 +244,7 @@ public class IdlePlaylistTests
         // PlaySelected 后存在切歌/加载瞬态窗口（短暂报 stopped/error，无进度），
         // 空闲歌跟踪必须继续观察，不得立即判定"播完"切走——与点歌状态机
         // IsAbortedPlayback 刚播即停双条件同语义
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
 
         // 命令驱动：收到 PlaySelected 后前 3 帧报 stopped（瞬态），此后正常
@@ -261,7 +278,7 @@ public class IdlePlaylistTests
     {
         // bug 回归（用户实测"点歌要等空闲歌结束很久才切"）：长空闲歌播放中
         // 新点歌必须被唤醒信号立即打断派发，不得等空闲歌自然播完
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, _) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
 
         // 空闲歌永不结束（一直 playing 的长歌）
@@ -294,15 +311,12 @@ public class IdlePlaylistTests
         {
             IdlePlaylist = new IdlePlaylistConfig { Enabled = true, PlayInterval = 10 },
         };
-        var (store, bus, queue, player) = await CreateIdleQueueAsync(config: longInterval);
+        var (store, bus, queue, player, playlistId) = await CreateIdleQueueAsync(config: longInterval);
         using var sub = bus.Subscribe<QueueEventEnvelope>();
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 1, 5000));
 
-        // 换列表：当前"晴天"在播期间替换歌单
-        await queue.ReloadIdleSongsAsync(new[]
-        {
-            new IdleSong { Name = "光辉岁月", Singer = "Beyond" },
-        });
+        // 换列表：当前"晴天"在播期间替换歌单曲目
+        await TestHarness.ReplaceIdleSongsAsync(store, queue, playlistId, ("光辉岁月", "Beyond"));
 
         // 立即按新列表播放（唤醒即打断，不干等 10s interval）
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 2, 2500));
@@ -312,18 +326,128 @@ public class IdlePlaylistTests
     [Fact]
     public async Task Idle_Reload_AppliesNewSongsWithoutRestart()
     {
-        var (store, bus, queue, player) = await CreateIdleQueueAsync();
+        var (store, bus, queue, player, playlistId) = await CreateIdleQueueAsync();
         using var sub = bus.Subscribe<QueueEventEnvelope>();
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 1));
 
-        await queue.ReloadIdleSongsAsync(new[]
-        {
-            new IdleSong { Name = "光辉岁月", Singer = "Beyond" },
-        });
+        await TestHarness.ReplaceIdleSongsAsync(store, queue, playlistId, ("光辉岁月", "Beyond"));
 
         // 歌单更新后下一首播新歌
         Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 2, 5000));
         Assert.Equal("光辉岁月", player.Executed[1].Track!.Title);
+    }
+
+    [Fact]
+    public async Task Idle_ShuffleMode_CoversAllSongsWithoutRepeatWithinCycle()
+    {
+        // 随机模式：一轮洗牌内不重复、轮尽覆盖全部（间隔调短加速）
+        var config = TestHarness.DefaultConfig() with
+        {
+            IdlePlaylist = new IdlePlaylistConfig { Enabled = true, PlayInterval = 1 },
+        };
+        var harness = await TestHarness.CreateAsync(config);
+        var player = new FakePlayer();
+        harness.Queue.Player = player;
+        harness.Queue.Processor = SearchHarness.Fixed();
+        var playlistId = await TestHarness.SeedIdlePlaylistAsync(
+            harness.Store, ("甲", "a"), ("乙", "b"), ("丙", "c"), ("丁", "d"));
+        await harness.Store.SetPlayModeAsync(playlistId, PlaylistPlayMode.Shuffle);
+
+        // 每首播完即 stopped（快轮转）
+        var plays = 0;
+        player.ProbeFunc = () =>
+        {
+            var dispatched = player.Executed.Any(e => e.Command == PlayerCommand.PlaySelected);
+            if (!dispatched)
+            {
+                return FakePlayer.Snapshot(status: "idle");
+            }
+
+            plays++;
+            return FakePlayer.Snapshot(status: "stopped", title: "x", progress: 300);
+        };
+        await harness.Queue.StartAsync();
+
+        // 等 4 首（一轮全覆盖）播出
+        Assert.True(await SearchHarness.WaitUntilAsync(
+            () => player.ExecutedSnapshot().Count(e => e.Command == PlayerCommand.PlaySelected) >= 4, 15000),
+            "随机模式未在 15s 内播满一轮 4 首");
+        var titles = player.ExecutedSnapshot()
+            .Where(e => e.Command == PlayerCommand.PlaySelected)
+            .Take(4)
+            .Select(e => e.Track!.Title)
+            .ToList();
+        // 一轮内无重复且全覆盖（洗牌袋语义）
+        Assert.Equal(4, titles.Distinct().Count());
+        Assert.Equal(new[] { "甲", "乙", "丙", "丁" }.OrderBy(t => t), titles.OrderBy(t => t));
+    }
+
+    [Fact]
+    public async Task Idle_StoredCandidates_PlaysDirectlyWithoutSearch()
+    {
+        // 导入时落库的存量候选（search_json）：优先直接派发，跳过实时搜索
+        // （存储候选是"海阔天空"，若走了搜索路径会播 Fixed() 返回的伪请求歌名）
+        var searched = 0;
+        Func<SongRequest, CancellationToken, Task<IReadOnlyList<SongSearchResult>?>> countingProcessor = (request, _) =>
+        {
+            searched++;
+            return SearchHarness.Fixed()(request, CancellationToken.None);
+        };
+        var harness = await TestHarness.CreateAsync(IdleConfig());
+        var player = new FakePlayer();
+        harness.Queue.Player = player;
+        harness.Queue.Processor = countingProcessor;
+        var playlistId = await TestHarness.SeedIdlePlaylistAsync(harness.Store, ("晴天", "周杰伦"));
+        await harness.Store.AddPlaylistSongAsync(playlistId, "海阔天空", "Beyond",
+            searchJson: """
+                [{"source":"netease","name":"海阔天空（存量候选）","singer":"Beyond","songmid":"mid-stored","types":[{"type":"128k","size":""}],"hash":""}]
+                """);
+        await harness.Queue.ReloadIdlePlaylistAsync();
+
+        var probes = 0;
+        player.ProbeFunc = () =>
+        {
+            var dispatched = player.Executed.Any(e => e.Command == PlayerCommand.PlaySelected);
+            if (!dispatched)
+            {
+                return FakePlayer.Snapshot(status: "idle");
+            }
+
+            probes++;
+            return probes <= 2
+                ? FakePlayer.Snapshot(status: "playing", title: "晴天", artist: "周杰伦", progress: probes * 10)
+                : FakePlayer.Snapshot(status: "stopped", title: "晴天", progress: 265);
+        };
+        await harness.Queue.StartAsync();
+
+        // 首播即为存量候选曲名（曲目顺序：晴天在前——晴天无存量候选走搜索，
+        // 海阔天空有存量候选直接派发；校验第二轮不消耗搜索次数）
+        Assert.True(await SearchHarness.WaitUntilAsync(
+            () => player.ExecutedSnapshot().Count(e => e.Command == PlayerCommand.PlaySelected) >= 2, 8000));
+        var secondTitle = player.ExecutedSnapshot()
+            .First(e => e.Command == PlayerCommand.PlaySelected && e.Track!.Title != "晴天")
+            .Track!.Title;
+        Assert.Equal("海阔天空（存量候选）", secondTitle);
+        // 只有"晴天"走了实时搜索（存量候选跳过搜索）
+        Assert.Equal(1, searched);
+    }
+
+    [Fact]
+    public async Task Idle_MarkedPlaylistDeleted_AfterReload_IdleStops()
+    {
+        // 删除被标记的歌单后热重载：空闲列表清空，不再继续播
+        var (store, bus, queue, player, playlistId) = await CreateIdleQueueAsync();
+        Assert.True(await SearchHarness.WaitUntilAsync(() => player.Executed.Count >= 1, 5000));
+
+        await store.DeletePlaylistAsync(playlistId);
+        await queue.ReloadIdlePlaylistAsync();
+
+        Assert.Null(queue.IdlePlaylist);
+        Assert.Empty(queue.IdleSongs);
+        await Task.Delay(600);
+        var countAfterDelete = player.Executed.Count;
+        await Task.Delay(600);
+        Assert.True(player.Executed.Count <= countAfterDelete + 1); // 不再轮转下一首
     }
 }
 

@@ -99,11 +99,38 @@ public sealed class LxMusicScheme
 
     private static Task DefaultLaunchAsync(string uri)
     {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri)
+        var startInfo = CreateProtocolStartInfo(uri);
+        // ShellExecute 不支持环境覆盖；直接启动协议程序，避免 Electron 开发环境让 LX 以 Node 模式退出。
+        startInfo.Environment.Remove("ELECTRON_RUN_AS_NODE");
+        System.Diagnostics.Process.Start(startInfo);
+        return Task.CompletedTask;
+    }
+
+    private static System.Diagnostics.ProcessStartInfo CreateProtocolStartInfo(string uri)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\lxmusic\shell\open\command")
+                ?? Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(@"lxmusic\shell\open\command");
+            if (key?.GetValue(null) is string command)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(command, @"^\s*""([^""]+)""");
+                if (match.Success)
+                {
+                    return new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = match.Groups[1].Value,
+                        Arguments = $"\"{uri}\"",
+                        UseShellExecute = false,
+                    };
+                }
+            }
+        }
+
+        return new System.Diagnostics.ProcessStartInfo(uri)
         {
             UseShellExecute = true,
-        });
-        return Task.CompletedTask;
+        };
     }
 }
 

@@ -5,7 +5,7 @@ namespace Erbai.Core.Tests;
 
 /// <summary>
 /// 存储域补齐（阶段 2 里程碑 1）：users / banned_users / banned_songs /
-/// idle_playlist 语义 + SqliteExecutor 关闭竞态修复。
+/// playlists 语义（含 v1→v2 迁移） + SqliteExecutor 关闭竞态修复。
 /// 行为对齐（test_save_user_writes_privileges_*、
 /// test_list_users_filters_*、test_set_user_admin_*）与 –§3。
 /// </summary>
@@ -270,29 +270,261 @@ public class StorageDomainTests
     }
 
     [Fact]
-    public async Task SaveIdleSongs_ReplacesKeepsOrder_DropsEmptyNames()
+    public async Task Playlists_CreateAddList_KeepsOrder_DropsEmptyNames()
     {
         await using var engine = await OpenEngineAsync();
-        await engine.SaveIdleSongsAsync(new[]
-        {
-            new IdleSong { Name = "晴天", Singer = "周杰伦" },
-            new IdleSong { Name = "海阔天空", Singer = "Beyond" },
-        });
+        var playlist = await engine.CreatePlaylistAsync(" 我的歌单 ");
+        Assert.Equal("我的歌单", playlist.Name);
+        Assert.Equal(PlaylistSource.Local, playlist.Source);
+        Assert.False(playlist.IsIdle);
 
-        var songs = await engine.LoadIdleSongsAsync();
-        Assert.Equal(2, songs.Count);
+        await engine.AddPlaylistSongAsync(playlist.Id, "晴天", "周杰伦");
+        await engine.AddPlaylistSongAsync(playlist.Id, "海阔天空", "Beyond", searchJson: "[{\"source\":\"netease\"}]");
+        // 批量路径空歌名剔除
+        await engine.AddPlaylistSongsAsync(playlist.Id,
+            new[] { ("  ", "x", (string?)null), ("光辉岁月", "", (string?)null) });
+
+        var songs = await engine.ListPlaylistSongsAsync(playlist.Id);
+        Assert.Equal(3, songs.Count);
         Assert.Equal("晴天", songs[0].Name);
+        Assert.Equal("周杰伦", songs[0].Singer);
+        Assert.Equal(0, songs[0].Position); // position 0 起始（沿用旧 idle_playlist_songs 约定）
         Assert.Equal("Beyond", songs[1].Singer);
+        Assert.NotNull(songs[1].SearchJson); // 导入候选快照原样落库
+        Assert.Equal("光辉岁月", songs[2].Name);
 
-        // 整体替换 + 空歌名剔除 + 保序
-        await engine.SaveIdleSongsAsync(new[]
+        var reloaded = Assert.Single(await engine.ListPlaylistsAsync());
+        Assert.Equal(3, reloaded.SongCount);
+    }
+
+    [Fact]
+    public async Task Playlists_AddSong_EmptyName_Throws()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("空名");
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await engine.AddPlaylistSongAsync(playlist.Id, "   "));
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await engine.CreatePlaylistAsync("  "));
+    }
+
+    [Fact]
+    public async Task Playlists_SetIdle_IsExclusive_SwitchingAndClearing()
+    {
+        await using var engine = await OpenEngineAsync();
+        var a = await engine.CreatePlaylistAsync("A");
+        var b = await engine.CreatePlaylistAsync("B");
+
+        var marked = await engine.SetIdlePlaylistAsync(a.Id);
+        Assert.NotNull(marked);
+        Assert.True(marked.IsIdle);
+        Assert.Equal("A", (await engine.GetIdlePlaylistAsync())!.Name);
+
+        // 标记 B 自动取消 A（唯一空闲播放源）
+        await engine.SetIdlePlaylistAsync(b.Id);
+        Assert.Equal("B", (await engine.GetIdlePlaylistAsync())!.Name);
+        Assert.False((await engine.GetPlaylistAsync(a.Id))!.IsIdle);
+
+        // 取消标记（null）→ 无空闲播放源
+        await engine.SetIdlePlaylistAsync(null);
+        Assert.Null(await engine.GetIdlePlaylistAsync());
+
+        // 不存在的 id：返回 null 且旧标记保持
+        await engine.SetIdlePlaylistAsync(a.Id);
+        Assert.Null(await engine.SetIdlePlaylistAsync(99999));
+        Assert.True((await engine.GetPlaylistAsync(a.Id))!.IsIdle);
+    }
+
+    [Fact]
+    public async Task Playlists_DeletePlaylist_CascadesSongs_AndClearsIdleMark()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("待删");
+        await engine.AddPlaylistSongAsync(playlist.Id, "晴天");
+        await engine.SetIdlePlaylistAsync(playlist.Id);
+
+        Assert.True(await engine.DeletePlaylistAsync(playlist.Id));
+        Assert.False(await engine.DeletePlaylistAsync(playlist.Id)); // 幂等
+        Assert.Empty(await engine.ListPlaylistSongsAsync(playlist.Id));
+        Assert.Empty(await engine.ListPlaylistsAsync());
+        Assert.Null(await engine.GetIdlePlaylistAsync()); // 被删歌单是空闲源 → 标记随之消失
+    }
+
+    [Fact]
+    public async Task Playlists_Rename_UpdatesName()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("旧名");
+
+        var renamed = await engine.RenamePlaylistAsync(playlist.Id, " 新名 ");
+        Assert.NotNull(renamed);
+        Assert.Equal("新名", renamed.Name);
+
+        Assert.Null(await engine.RenamePlaylistAsync(99999, "随便"));
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await engine.RenamePlaylistAsync(playlist.Id, "  "));
+    }
+
+    [Fact]
+    public async Task Playlists_MoveSong_SwapsNeighbors_Bounded()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("排序");
+        var a = await engine.AddPlaylistSongAsync(playlist.Id, "A");
+        var b = await engine.AddPlaylistSongAsync(playlist.Id, "B");
+        var c = await engine.AddPlaylistSongAsync(playlist.Id, "C");
+
+        // 上移 B：B A C
+        await engine.MovePlaylistSongAsync(playlist.Id, b.Id, -1);
+        var songs = await engine.ListPlaylistSongsAsync(playlist.Id);
+        Assert.Equal(["B", "A", "C"], songs.Select(s => s.Name).ToArray());
+
+        // 上移首个 / 下移末个：越界无操作
+        await engine.MovePlaylistSongAsync(playlist.Id, b.Id, -1);
+        await engine.MovePlaylistSongAsync(playlist.Id, c.Id, +1);
+        songs = await engine.ListPlaylistSongsAsync(playlist.Id);
+        Assert.Equal(["B", "A", "C"], songs.Select(s => s.Name).ToArray());
+
+        // 下移 B：A B C
+        await engine.MovePlaylistSongAsync(playlist.Id, b.Id, +1);
+        songs = await engine.ListPlaylistSongsAsync(playlist.Id);
+        Assert.Equal(["A", "B", "C"], songs.Select(s => s.Name).ToArray());
+
+        // 不存在的歌单/歌曲：无操作不抛
+        await engine.MovePlaylistSongAsync(99999, b.Id, -1);
+        await engine.MovePlaylistSongAsync(playlist.Id, 99999, -1);
+    }
+
+    [Fact]
+    public async Task Playlists_SetPlayMode_Persists()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("模式");
+
+        var shuffled = await engine.SetPlayModeAsync(playlist.Id, PlaylistPlayMode.Shuffle);
+        Assert.NotNull(shuffled);
+        Assert.Equal(PlaylistPlayMode.Shuffle, shuffled.PlayMode);
+
+        // 重开引擎后仍在（落库）
+        await engine.CloseAsync();
+        await engine.OpenAsync();
+        var reloaded = await engine.GetPlaylistAsync(playlist.Id);
+        Assert.Equal(PlaylistPlayMode.Shuffle, reloaded!.PlayMode);
+    }
+
+    [Fact]
+    public async Task Playlists_ImportedSourceLookup_FindBySourceAndSourceId()
+    {
+        await using var engine = await OpenEngineAsync();
+        await engine.CreatePlaylistAsync("本机", PlaylistSource.Local, "123");
+
+        var imported = await engine.CreatePlaylistAsync("网易云单", PlaylistSource.Netease, "7530558459");
+        Assert.Equal(PlaylistSource.Netease, imported.Source);
+        Assert.Equal("7530558459", imported.SourceId);
+
+        var found = await engine.FindImportedPlaylistAsync(PlaylistSource.Netease, "7530558459");
+        Assert.NotNull(found);
+        Assert.Equal(imported.Id, found.Id);
+
+        // 本机歌单不参与来源对账；其他 source 同 id 不误命中
+        Assert.Null(await engine.FindImportedPlaylistAsync(PlaylistSource.Local, "123"));
+        Assert.Null(await engine.FindImportedPlaylistAsync(PlaylistSource.Qqmusic, "7530558459"));
+        Assert.Null(await engine.FindImportedPlaylistAsync(PlaylistSource.Netease, ""));
+    }
+
+    [Fact]
+    public async Task Playlists_ClearSongs_KeepsPlaylist()
+    {
+        await using var engine = await OpenEngineAsync();
+        var playlist = await engine.CreatePlaylistAsync("清空");
+        await engine.AddPlaylistSongAsync(playlist.Id, "晴天");
+
+        Assert.True(await engine.ClearPlaylistSongsAsync(playlist.Id));
+        Assert.Empty(await engine.ListPlaylistSongsAsync(playlist.Id));
+        Assert.Single(await engine.ListPlaylistsAsync());
+        Assert.False(await engine.ClearPlaylistSongsAsync(99999));
+    }
+
+    // ---- v1→v2 迁移：独立空闲歌单收编为指定歌单 ----
+
+    /// <summary>手工构造 v1 库（旧 schema：idle_playlist_songs + 版本标记 1）。</summary>
+    private static string CreateV1Database()
+    {
+        var path = TempDb();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE schema_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            INSERT INTO schema_meta(key, value) VALUES ('schema_version', '1');
+            CREATE TABLE idle_playlist_songs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                singer TEXT NOT NULL DEFAULT '',
+                position INTEGER NOT NULL
+            );
+            INSERT INTO idle_playlist_songs(name, singer, position) VALUES ('晴天', '周杰伦', 0);
+            INSERT INTO idle_playlist_songs(name, singer, position) VALUES ('海阔天空', 'Beyond', 1);
+            INSERT INTO idle_playlist_songs(name, singer, position) VALUES ('光辉岁月', 'Beyond', 2);
+            """;
+        command.ExecuteNonQuery();
+        return path;
+    }
+
+    [Fact]
+    public async Task Migration_V1ToV2_CarriesIdleSongsIntoDefaultMarkedPlaylist()
+    {
+        var path = CreateV1Database();
+        await using var engine = new SqliteStorageEngine(path);
+        await engine.OpenAsync(); // 触发 v1→v2 迁移
+
+        // 旧空闲歌单收编为默认歌单，自动标记为空闲播放源，顺序保持
+        var idle = await engine.GetIdlePlaylistAsync();
+        Assert.NotNull(idle);
+        Assert.Equal("我的空闲歌单", idle.Name);
+        Assert.True(idle.IsIdle);
+
+        var songs = await engine.ListPlaylistSongsAsync(idle.Id);
+        Assert.Equal(3, songs.Count);
+        Assert.Equal(["晴天", "海阔天空", "光辉岁月"], songs.Select(s => s.Name).ToArray());
+        Assert.Equal([0, 1, 2], songs.Select(s => s.Position).ToArray());
+
+        // 旧表已删除；版本号已升级
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
         {
-            new IdleSong { Name = "  ", Singer = "x" },
-            new IdleSong { Name = "光辉岁月", Singer = "" },
-        });
-        songs = await engine.LoadIdleSongsAsync();
-        Assert.Single(songs);
-        Assert.Equal("光辉岁月", songs[0].Name);
+            connection.Open();
+            using var tables = connection.CreateCommand();
+            tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='idle_playlist_songs'";
+            Assert.Equal(0L, tables.ExecuteScalar());
+            using var version = connection.CreateCommand();
+            version.CommandText = "SELECT value FROM schema_meta WHERE key='schema_version'";
+            Assert.Equal("2", version.ExecuteScalar());
+        }
+    }
+
+    [Fact]
+    public async Task Migration_V1ToV2_EmptyIdleTable_StillCreatesDefaultPlaylist()
+    {
+        var path = CreateV1Database();
+        // 清空曲目，模拟"配置过但没加歌"的老用户
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM idle_playlist_songs";
+            command.ExecuteNonQuery();
+        }
+
+        await using var engine = new SqliteStorageEngine(path);
+        await engine.OpenAsync();
+
+        var idle = await engine.GetIdlePlaylistAsync();
+        Assert.NotNull(idle); // 空表也建默认歌单并标记（保留"曾配置过"的状态）
+        Assert.Empty(await engine.ListPlaylistSongsAsync(idle.Id));
     }
 
     [Fact]

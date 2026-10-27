@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Erbai.App.Views.PlaylistPage"
+    NavigationCacheMode="Enabled"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ux="using:Erbai.App.Ux"
+    xmlns:views="using:Erbai.App.Views">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ux:PageHeader Icon="Audio" Title="歌单"
+                       Subtitle="创建 / 导入歌单，标记一个作为空闲播放源——点歌队列空时自动轮播；开关与间隔在设置页" />
+
+        <Grid Grid.Row="1" ColumnSpacing="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="290" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左列：歌单列表 -->
+            <StackPanel Grid.Column="0" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="新建歌单" Style="{StaticResource AccentButtonStyle}" Click="OnCreatePlaylist" />
+                    <Button Content="导入歌单链接" Click="OnImportPlaylist" />
+                    <TextBlock x:Name="ListStatus" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                </StackPanel>
+                <ListView x:Name="PlaylistList" SelectionMode="Single" SelectionChanged="OnPlaylistSelected">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="MinHeight" Value="52" />
+                            <Setter Property="CornerRadius" Value="6" />
+                            <Setter Property="Padding" Value="8,4" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="views:PlaylistDisplay">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <Border Background="{ThemeResource SystemFillColorCautionBrush}" CornerRadius="3" Padding="4,1"
+                                                VerticalAlignment="Center" Visibility="{x:Bind IdleBadgeVisibility}">
+                                            <TextBlock Text="空闲播放" FontSize="11" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{x:Bind Summary}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock x:Name="PlaylistEmptyText"
+                           Text="还没有歌单——点「新建歌单」创建，或把网易云 / QQ 音乐 / 酷狗的分享链接粘贴进「导入歌单链接」。"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- 右列：歌单详情 -->
+            <StackPanel x:Name="DetailPanel" Grid.Column="1" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock x:Name="DetailTitle" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center" MaxWidth="220"
+                               TextTrimming="CharacterEllipsis" />
+                    <ToggleSwitch x:Name="IdleToggle" OnContent="" OffContent="" Toggled="OnIdleToggled"
+                                  MinWidth="0" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="空闲播放源" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" />
+                    <ComboBox x:Name="PlayModeBox" SelectionChanged="OnPlayModeChanged" Margin="12,0,0,0"
+                              VerticalAlignment="Center" MinWidth="110" TabIndex="1">
+                        <ComboBoxItem Content="顺序播放" />
+                        <ComboBoxItem Content="随机播放" />
+                    </ComboBox>
+                    <Button Content="重命名" Click="OnRenamePlaylist" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <Button Content="删除歌单" Click="OnDeletePlaylist" VerticalAlignment="Center" />
+                    <TextBlock x:Name="DetailStatus" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Text="标记为空闲播放源后，点歌队列空时自动轮播这个歌单（顺序/随机可切换）；空闲开关与播放间隔在设置页。"
+                           Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="SongNameBox" PlaceholderText="歌名" Width="220" KeyDown="OnAddSongKeyDown" />
+                    <TextBox x:Name="SongSingerBox" PlaceholderText="歌手（可选）" Width="160" />
+                    <Button Content="添加" Click="OnAddSong" />
+                </StackPanel>
+                <Border Style="{StaticResource TableHeaderBorderStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="序号" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="1" Text="歌名" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="2" Text="歌手" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock Grid.Column="3" Text="操作" Style="{StaticResource CaptionTextStyle}" />
+                    </Grid>
+                </Border>
+                <Grid>
+                    <ListView x:Name="SongList" MaxHeight="430" Padding="12,0,12,0">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="MinHeight" Value="40" />
+                                <Setter Property="CornerRadius" Value="6" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="views:PlaylistSongDisplay">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Index}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind Singer}" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <Button Content="↑" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveSongUp" Tag="{x:Bind Id}" />
+                                        <Button Content="↓" Style="{StaticResource InlineActionButtonStyle}" Click="OnMoveSongDown" Tag="{x:Bind Id}" />
+                                        <Button Content="删除" Style="{StaticResource InlineActionButtonStyle}" Click="OnRemoveSong" Tag="{x:Bind Id}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <ux:EmptyState x:Name="SongEmptyState" Symbol="MusicInfo"
+                                   Title="歌单还没有歌曲"
+                                   Subtitle="在上方输入歌名添加，或从历史页点「+」把播过的歌收进来。" />
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

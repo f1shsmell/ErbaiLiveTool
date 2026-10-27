@@ -128,6 +128,41 @@ namespace Erbai.Modules.SongRequest.Tests
         await Task.Yield();
         return list;
     }
+
+    /// <summary>
+    /// 建一个指定歌单并标记为空闲播放源、按序加入曲目（空闲播放测试公共设施；
+    /// 旧 idle_playlist_songs 时代的 SaveIdleSongsAsync 直写已被多歌单模型替代）。
+    /// </summary>
+    public static async Task<long> SeedIdlePlaylistAsync(
+        SqliteStorageEngine store, params (string Name, string Singer)[] songs)
+    {
+        var playlist = await store.CreatePlaylistAsync("我的空闲歌单");
+        await store.SetIdlePlaylistAsync(playlist.Id);
+        foreach (var (name, singer) in songs)
+        {
+            await store.AddPlaylistSongAsync(playlist.Id, name, singer);
+        }
+
+        return playlist.Id;
+    }
+
+    /// <summary>替换空闲播放源歌单曲目并热重载（旧 ReloadIdleSongsAsync 的等价操作）。</summary>
+    public static async Task ReplaceIdleSongsAsync(
+        SqliteStorageEngine store, SongQueueService queue, long playlistId,
+        params (string Name, string Singer)[] songs)
+    {
+        foreach (var song in await store.ListPlaylistSongsAsync(playlistId))
+        {
+            await store.RemovePlaylistSongAsync(song.Id);
+        }
+
+        foreach (var (name, singer) in songs)
+        {
+            await store.AddPlaylistSongAsync(playlistId, name, singer);
+        }
+
+        await queue.ReloadIdlePlaylistAsync();
+    }
 }
 
 }

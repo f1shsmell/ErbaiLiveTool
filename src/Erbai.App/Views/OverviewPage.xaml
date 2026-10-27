@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Erbai.App.Views.OverviewPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -6,172 +6,193 @@
     xmlns:ux="using:Erbai.App.Ux"
     xmlns:views="using:Erbai.App.Views">
     <ScrollViewer>
-        <StackPanel Padding="24" Spacing="16">
+        <StackPanel Padding="28,24,28,32" Spacing="18" MaxWidth="1280" HorizontalAlignment="Left">
+            <ux:PageHeader Icon="Home" Title="直播概览"
+                           Subtitle="连接直播间，查看播放进度与实时互动" />
 
-            <!-- 标题区 -->
-            <ux:PageHeader Icon="Home" Title="概览"
-                           Subtitle="平台连接、当前播放与待处理队列（悬浮窗样式已移至「显示与悬浮窗」页）" />
-
-            <!-- 平台连接（统一连接状态：#8 未配置/未连接/已连接/异常，文字+圆点+颜色） -->
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Border Width="32" Height="32" CornerRadius="8" VerticalAlignment="Center">
-                                <Border.Background>
-                                    <SolidColorBrush Color="#FB7299" Opacity="0.16" />
-                                </Border.Background>
-                                <FontIcon Glyph="&#xE7F4;" FontSize="15" Foreground="#FB7299" />
-                            </Border>
-                            <TextBlock Text="B站直播" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <ux:StatusBadge x:Name="BiliBadge" />
-                            <TextBlock x:Name="BiliDetailText" Text="-" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox x:Name="RoomIdBox" PlaceholderText="B站房间号（如 5050）" HorizontalAlignment="Stretch" MinWidth="120" MaxWidth="280" />
-                            <Button x:Name="BiliStartButton" Content="启动" Style="{StaticResource AccentButtonStyle}" Click="OnBiliStart" />
-                            <Button x:Name="BiliStopButton" Content="停止" IsEnabled="False" Click="OnBiliStop" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Border Width="32" Height="32" CornerRadius="8" VerticalAlignment="Center">
-                                <Border.Background>
-                                    <SolidColorBrush Color="#25F4EE" Opacity="0.14" />
-                                </Border.Background>
-                                <FontIcon Glyph="&#xE8D6;" FontSize="15" Foreground="#0EA5A0" />
-                            </Border>
-                            <TextBlock Text="抖音直播" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <ux:StatusBadge x:Name="DouyinBadge" />
-                            <TextBlock x:Name="DouyinDetailText" Text="-" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox x:Name="DouyinRoomBox" PlaceholderText="抖音房间号（可选，白名单）" HorizontalAlignment="Stretch" MinWidth="120" MaxWidth="280" />
-                            <Button x:Name="DouyinStartButton" Content="启动" Style="{StaticResource AccentButtonStyle}" Click="OnDouyinStart" />
-                            <Button x:Name="DouyinStopButton" Content="停止" IsEnabled="False" Click="OnDouyinStop" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <!-- 手动点歌（评审第一轮 #3：提升到首屏，Enter 提交） -->
             <Border Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="10">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="手动点歌" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-                        <TextBlock Text="直接输入 歌名 - 歌手；弹幕命令：切歌 / 设置管理员@昵称"
-                                   Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="直播连接" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                        <TextBlock Text="启动后开始接收弹幕与礼物事件" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox x:Name="DanmakuInput" HorizontalAlignment="Stretch" PlaceholderText="歌名 - 歌手，回车提交（无需输入点歌）" KeyDown="OnDanmakuInputKeyDown" />
-                        <Button Content="发送" Click="OnSendDanmaku" />
-                    </StackPanel>
-                    <TextBlock x:Name="LogText" Text="" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                    <Border Style="{StaticResource CardDividerStyle}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="12" Margin="0,0,20,0">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="B站直播" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                <ux:StatusBadge x:Name="BiliBadge" Grid.Column="1" />
+                                <TextBlock x:Name="BiliDetailText" Grid.Column="2" Text="-" Style="{StaticResource CaptionTextStyle}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="RoomIdBox" PlaceholderText="B站房间号（如 5050）" />
+                                <Button x:Name="BiliStartButton" Grid.Column="1" Content="启动" MinWidth="68"
+                                        Style="{StaticResource AccentButtonStyle}" Click="OnBiliStart" />
+                                <Button x:Name="BiliStopButton" Grid.Column="2" Content="停止" MinWidth="68"
+                                        IsEnabled="False" Click="OnBiliStop" />
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="12" Margin="20,0,0,0">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="抖音直播" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                <ux:StatusBadge x:Name="DouyinBadge" Grid.Column="1" />
+                                <TextBlock x:Name="DouyinDetailText" Grid.Column="2" Text="-" Style="{StaticResource CaptionTextStyle}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="DouyinRoomBox" PlaceholderText="抖音房间号（可选）" />
+                                <Button x:Name="DouyinStartButton" Grid.Column="1" Content="启动" MinWidth="68"
+                                        Style="{StaticResource AccentButtonStyle}" Click="OnDouyinStart" />
+                                <Button x:Name="DouyinStopButton" Grid.Column="2" Content="停止" MinWidth="68"
+                                        IsEnabled="False" Click="OnDouyinStop" />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- 中部主区：正在播放/队列 + 互动排队 -->
-            <Grid ColumnSpacing="12">
+            <Grid ColumnSpacing="18">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="3*" />
+                    <ColumnDefinition Width="2*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 正在播放 + 歌曲队列 -->
                 <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="正在播放" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="PlayerText" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Border Width="4" CornerRadius="2" Background="{ThemeResource BrandAccentBrush}" />
-                            <TextBlock x:Name="CurrentSongText" Text="暂无" FontSize="20" FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <Border Style="{StaticResource CardDividerStyle}" />
+                            <TextBlock x:Name="PlayerText" Grid.Column="1" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="CurrentSongText" Text="暂无播放" FontSize="26" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" Margin="0,18,0,0" />
+                        <Border Style="{StaticResource CardDividerStyle}" Margin="0,20,0,14" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="歌曲队列" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                            <TextBlock Text="待播队列" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
                             <TextBlock x:Name="QueueStatsText" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
-                            <TextBlock Text="完整列表见「点歌队列」页" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
                         </StackPanel>
-                        <ListView x:Name="QueueList" SelectionMode="None" MaxHeight="220">
+                        <ListView x:Name="QueueList" SelectionMode="None" Height="172" Margin="0,8,0,0">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="Padding" Value="4,3" />
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="views:QueueDisplay">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Position}" FontWeight="SemiBold" MinWidth="20" />
-                                        <TextBlock Text="★" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" Visibility="{x:Bind IsCurrent}" />
-                                        <TextBlock Text="{x:Bind SongName}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind Singer}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{x:Bind StatusText}" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" />
-                                    </StackPanel>
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="28" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{x:Bind Position}" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{x:Bind SongName}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind Singer}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{x:Bind StatusText}" Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12" VerticalAlignment="Center" />
+                                    </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
-                        <TextBlock x:Name="QueueEmptyText" Text="暂无待播歌曲——可在上方手动点歌，或等待直播间观众提交。"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="QueueEmptyText" Text="队列为空，可手动点歌或等待观众提交。"
+                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" Margin="0,10,0,0" />
                     </StackPanel>
                 </Border>
 
-                <!-- 互动排队 -->
-                <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}">
-                    <StackPanel Spacing="10">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="互动排队" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="QueueUpStatsText" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
-                            <TextBlock Text="活动与请求见「排队队列」页" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Spacing="18">
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="手动点歌" Style="{StaticResource SectionHeaderTextStyle}" />
+                            <TextBlock Text="输入歌名与歌手，按回车即可加入队列" Style="{StaticResource CaptionTextStyle}" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="DanmakuInput" PlaceholderText="歌名 - 歌手" KeyDown="OnDanmakuInputKeyDown" />
+                                <Button Grid.Column="1" Content="添加" MinWidth="68" Style="{StaticResource AccentButtonStyle}" Click="OnSendDanmaku" />
+                            </Grid>
+                            <TextBlock x:Name="LogText" Text="" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
-                        <ListView x:Name="QueueUpList" SelectionMode="None" MaxHeight="240">
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="Padding" Value="4,2" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="views:QueueUpDisplay">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind PositionText}" FontWeight="SemiBold" MinWidth="24" />
-                                        <StackPanel>
-                                            <TextBlock Text="{x:Bind TitleText}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{x:Bind SubText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <TextBlock x:Name="QueueUpEmptyText" Text="暂无排队——观众可发送「排队 内容」加入，主播可发「完成」推进。"
-                                   Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="互动排队" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="QueueUpStatsText" Text="-" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ListView x:Name="QueueUpList" SelectionMode="None" Height="108" Margin="0,8,0,0">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Padding" Value="4,3" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="views:QueueUpDisplay">
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="28" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{x:Bind PositionText}" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind TitleText}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{x:Bind SubText}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <TextBlock x:Name="QueueUpEmptyText" Text="暂无观众排队" Style="{StaticResource CaptionTextStyle}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Grid>
 
-            <!-- 实时事件流（默认仅显示直播相关事件） -->
             <Border Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="8">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="实时事件" Style="{StaticResource SectionHeaderTextStyle}" VerticalAlignment="Center" />
                         <TextBlock x:Name="PreviewCountText" Text="0 条" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
-                        <TextBlock Text="B站 / 抖音 弹幕 · 礼物 · 关注 · 点赞等 · 完整流水见「日志」页" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <Grid>
-                        <ListView x:Name="PreviewList" Height="220" SelectionMode="None">
+                    <Grid Margin="0,10,0,0">
+                        <ListView x:Name="PreviewList" Height="180" SelectionMode="None">
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="Padding" Value="4,3" />
                                 </Style>
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
@@ -181,8 +202,8 @@
                             </ListView.ItemTemplate>
                         </ListView>
                         <ux:EmptyState x:Name="PreviewEmptyState" Symbol="Comment"
-                                       Title="暂无直播事件"
-                                       Subtitle="启动平台监听后，弹幕、礼物、关注、点赞等事件会在这里实时滚动。" />
+                                       Title="还没有直播事件"
+                                       Subtitle="连接直播间后，弹幕、礼物和关注消息会显示在这里" />
                     </Grid>
                 </StackPanel>
             </Border>

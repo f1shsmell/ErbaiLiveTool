@@ -16,10 +16,10 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
 
         // 窗口/任务栏图标（logo 2026-09-08）：exe 已经 ApplicationIcon 内嵌图标，
         // 但 WinUI 3 未打包应用的窗口标题栏图标不随 exe 图标，须显式 SetIcon
-        // （Assets\AppLogo.ico 作为 Content 随构建/发布进输出目录）。
+        // （Assets\AppLogoV2.ico 作为 Content 随构建/发布进输出目录）。
         try
         {
-            AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppLogo.ico"));
+            AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppLogoV2.ico"));
         }
         catch
         {
@@ -151,7 +151,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         try
         {
             AppTitleIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
-                new Uri("ms-appx:///Assets/AppLogo.png"));
+                new Uri("ms-appx:///Assets/AppLogoV2.png"));
         }
         catch
         {
@@ -287,7 +287,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         var logs = App.Services?.Logs;
         try
         {
-            var icoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "TrayIcon.ico");
+            var icoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "TrayIconV2.ico");
             logs?.Log(Erbai.Contracts.Logging.LogLevel.Information,
                 $"[托盘] 初始化：图标 {icoPath}，存在={File.Exists(icoPath)}");
             if (!File.Exists(icoPath))
@@ -431,6 +431,7 @@ public sealed partial class MainWindow : Microsoft.UI.Xaml.Window
         {
             "queue" => typeof(QueuePage),
             "queueup" => typeof(QueueUpPage),
+            "playlists" => typeof(PlaylistPage),
             "history" => typeof(HistoryPage),
             "danmakulog" => typeof(DanmakuLogPage),
             "display" => typeof(DisplayPage),

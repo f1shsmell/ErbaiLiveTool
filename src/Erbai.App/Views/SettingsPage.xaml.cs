@@ -9,9 +9,28 @@ namespace Erbai.App.Views;
 
 public sealed partial class SettingsPage : Page
 {
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _autoSaveTimer;
+    private bool _autoSaveReady;
+    private bool _saveInProgress;
+    private int _changeRevision;
+    private int _savedRevision;
+
     public SettingsPage()
     {
         InitializeComponent();
+        _autoSaveTimer = DispatcherQueue.CreateTimer();
+        _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(650);
+        _autoSaveTimer.IsRepeating = false;
+        _autoSaveTimer.Tick += async (_, _) => await SaveSettingsAsync();
+        Unloaded += async (_, _) =>
+        {
+            _autoSaveTimer.Stop();
+            if (_savedRevision != _changeRevision)
+            {
+                await SaveSettingsAsync();
+            }
+        };
+
         var settings = App.Services.Config.Settings;
         MinimizeToTrayToggle.IsOn = settings.Runtime.MinimizeToTrayOnClose;
         IdleEnabledToggle.IsOn = settings.IdlePlaylist.Enabled;
@@ -21,7 +40,45 @@ public sealed partial class SettingsPage : Page
         InitPlayerSection(settings);
         RefreshLoginStatus();
         RefreshBackupList();
+        _autoSaveReady = true;
+        _ = RefreshIdleSourceAsync();
     }
+
+    private void OnAutoSaveToggle(object sender, RoutedEventArgs e) => ScheduleAutoSave();
+
+    private void OnAutoSaveText(object sender, TextChangedEventArgs e) => ScheduleAutoSave();
+
+    private void OnAutoSaveNumber(NumberBox sender, NumberBoxValueChangedEventArgs args) => ScheduleAutoSave();
+
+    private void ScheduleAutoSave()
+    {
+        if (!_autoSaveReady)
+        {
+            return;
+        }
+
+        _changeRevision++;
+        SaveStatus.Text = "等待自动保存…";
+        _autoSaveTimer.Stop();
+        _autoSaveTimer.Start();
+    }
+
+    /// <summary>当前空闲播放源显示（异步查库；其他页面改标记后重进设置页能刷新）。</summary>
+    private async Task RefreshIdleSourceAsync()
+    {
+        try
+        {
+            var idle = await App.Services.Storage.GetIdlePlaylistAsync();
+            IdleSourceText.Text = idle is null ? "未指定" : idle.Name;
+        }
+        catch
+        {
+            // 纯显示性查询：失败保持占位文案即可
+        }
+    }
+
+    private void OnGotoPlaylists(object sender, RoutedEventArgs e) =>
+        (App.MainWindow as MainWindow)?.NavigateTo("playlists");
 
     // ---- 点歌队列（历史修复记录 #16：数量限制可配置）----
 
@@ -199,6 +256,7 @@ public sealed partial class SettingsPage : Page
         var key = (PlayerKeyCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString();
         RefreshFoliaTokenCard(key);
         RefreshPlayerStatus();
+        ScheduleAutoSave();
     }
 
     /// <summary>Folia token 卡片只在选中 folia 时有意义——其他连接器不读这个 token。</summary>
@@ -339,73 +397,101 @@ public sealed partial class SettingsPage : Page
         RefreshLoginStatus();
     }
 
-    private async void OnSave(object sender, RoutedEventArgs e)
+    private async Task SaveSettingsAsync()
     {
+        if (_saveInProgress || _savedRevision == _changeRevision)
+        {
+            return;
+        }
+
+        _saveInProgress = true;
         try
         {
-            var services = App.Services;
-            var current = services.Config.Settings;
+            while (_savedRevision != _changeRevision)
+            {
+                var revision = _changeRevision;
+                var numericValues = new[]
+                {
+                    QueueMaxSizeBox.Value,
+                    QueueMaxPerUserBox.Value,
+                    QueueDisplayLimitBox.Value,
+                    DouyinFanLevelBox.Value,
+                    BilibiliMedalLevelBox.Value,
+                    IdleIntervalBox.Value,
+                };
+                if (numericValues.Any(value => double.IsNaN(value) || double.IsInfinity(value)))
+                {
+                    SaveStatus.Text = "存在无效数值，尚未保存";
+                    return;
+                }
 
-            // 下拉里选中的未必是配置里那一个：配置的平台未安装时下拉会回落（见 SelectPlayerKey）。
-            // 用户没动过下拉就不按回落值写盘——否则"只想改个房间号、顺手点保存"会把播放器
-            // 悄悄换掉（静默改配置是最难排查的一类问题）。
-            var playerKey = _playerTouchedByUser
-                ? (PlayerKeyCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? current.Player.Key
-                : current.Player.Key;
-            var candidate = current with
-            {
-                Player = current.Player with
+                SaveStatus.Text = "正在保存…";
+                var services = App.Services;
+                var current = services.Config.Settings;
+                var playerKey = _playerTouchedByUser
+                    ? (PlayerKeyCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? current.Player.Key
+                    : current.Player.Key;
+                var candidate = current with
                 {
-                    Key = playerKey,
-                    FoliaToken = FoliaTokenBox.Text.Trim(),
-                },
-                Queue = current.Queue with
-                {
-                    MaxSize = (int)QueueMaxSizeBox.Value,
-                    UserLimitEnabled = QueueUserLimitToggle.IsOn,
-                    MaxPerUser = (int)QueueMaxPerUserBox.Value,
-                    DedupeEnabled = QueueDedupeToggle.IsOn,
-                    DisplayLimit = (int)QueueDisplayLimitBox.Value,
-                },
-                Permissions = current.Permissions with
-                {
-                    DouyinMinFanLevel = DouyinFanLevelToggle.IsOn ? (int)DouyinFanLevelBox.Value : 0,
-                    BilibiliMinMedalLevel = BilibiliMedalLevelToggle.IsOn ? (int)BilibiliMedalLevelBox.Value : 0,
-                    AdminBypass = AdminBypassToggle.IsOn,
-                },
-                IdlePlaylist = new IdlePlaylistConfig
-                {
-                    Enabled = IdleEnabledToggle.IsOn,
-                    PlayInterval = (int)IdleIntervalBox.Value,
-                },
-                Runtime = current.Runtime with
-                {
-                    LiveEventLog = LiveEventLogToggle.IsOn,
-                    MinimizeToTrayOnClose = MinimizeToTrayToggle.IsOn,
-                },
-            };
-            // 先写盘成功再更新内存（ConfigStore 语义）；队列/权限策略与空闲歌单配置热生效
-            await services.Config.PersistAsync(candidate);
-            services.Queue.ReloadPolicy(candidate);
-            services.Queue.ReloadIdleConfig(candidate.IdlePlaylist);
-            await services.Queue.ReloadIdleSongsAsync(await services.Storage.LoadIdleSongsAsync());
+                    Player = current.Player with
+                    {
+                        Key = playerKey,
+                        FoliaToken = FoliaTokenBox.Text.Trim(),
+                    },
+                    Queue = current.Queue with
+                    {
+                        MaxSize = (int)QueueMaxSizeBox.Value,
+                        UserLimitEnabled = QueueUserLimitToggle.IsOn,
+                        MaxPerUser = (int)QueueMaxPerUserBox.Value,
+                        DedupeEnabled = QueueDedupeToggle.IsOn,
+                        DisplayLimit = (int)QueueDisplayLimitBox.Value,
+                    },
+                    Permissions = current.Permissions with
+                    {
+                        DouyinMinFanLevel = DouyinFanLevelToggle.IsOn ? (int)DouyinFanLevelBox.Value : 0,
+                        BilibiliMinMedalLevel = BilibiliMedalLevelToggle.IsOn ? (int)BilibiliMedalLevelBox.Value : 0,
+                        AdminBypass = AdminBypassToggle.IsOn,
+                    },
+                    IdlePlaylist = new IdlePlaylistConfig
+                    {
+                        Enabled = IdleEnabledToggle.IsOn,
+                        PlayInterval = (int)IdleIntervalBox.Value,
+                    },
+                    Runtime = current.Runtime with
+                    {
+                        LiveEventLog = LiveEventLogToggle.IsOn,
+                        MinimizeToTrayOnClose = MinimizeToTrayToggle.IsOn,
+                    },
+                };
 
-            // 播放器/Folia token 变更热切换连接器（token 经环境变量注入子进程，
-            // 只改配置不重建连接器不生效）；失败保持原连接器继续点歌
-            if (playerKey != current.Player.Key ||
-                candidate.Player.FoliaToken != current.Player.FoliaToken)
-            {
-                SaveStatus.Text = await services.SwitchPlayerAsync(playerKey);
-                RefreshPlayerStatus();
-            }
-            else
-            {
-                SaveStatus.Text = "已保存（空闲歌单配置热生效）";
+                await services.Config.PersistAsync(candidate);
+                services.Queue.ReloadPolicy(candidate);
+                services.Queue.ReloadIdleConfig(candidate.IdlePlaylist);
+                await services.Queue.ReloadIdlePlaylistAsync();
+                await RefreshIdleSourceAsync();
+
+                string? playerStatus = null;
+                if (playerKey != current.Player.Key ||
+                    candidate.Player.FoliaToken != current.Player.FoliaToken)
+                {
+                    playerStatus = await services.SwitchPlayerAsync(playerKey);
+                    RefreshPlayerStatus();
+                }
+
+                _savedRevision = revision;
+                if (revision == _changeRevision)
+                {
+                    SaveStatus.Text = playerStatus ?? $"已自动保存 · {DateTime.Now:HH:mm}";
+                }
             }
         }
         catch (Exception ex)
         {
             SaveStatus.Text = $"保存失败：{ex.Message}";
+        }
+        finally
+        {
+            _saveInProgress = false;
         }
     }
 }

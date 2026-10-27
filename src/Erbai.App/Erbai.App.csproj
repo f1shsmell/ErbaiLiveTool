@@ -7,7 +7,7 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <RootNamespace>Erbai.App</RootNamespace>
     <AssemblyName>ErbaiLiveTool</AssemblyName>
-    <ApplicationIcon>Assets\AppLogo.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\AppLogoV2.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <DefaultLanguage>zh-CN</DefaultLanguage>
     <Platforms>x64</Platforms>
@@ -147,12 +147,9 @@
     <!-- 内置插件元数据（与上面拷贝钩子配套；Content 开发构建进输出，发布走 Publish 钩子） -->
     <Content Include="Plugins\queueup\config.ini" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Plugins\giftfx\config.ini" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 应用图标（logo 2026-09-08）：ico 供 AppWindow.SetIcon 运行时加载（窗口/任务栏），
-         png 保留原始素材；随构建/发布进输出目录。exe 本身经 ApplicationIcon 内嵌图标。
-         TrayIcon.ico（2026-09-09）：系统托盘专用图标（用户提供素材生成 64x64）；
-         托盘走 System.Drawing.Icon 同步加载（BitmapImage 异步解码会出透明图标，见 MainWindow）。 -->
-    <Content Include="Assets\AppLogo.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets\AppLogo.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets\TrayIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- v2 图标：ico 供窗口、任务栏和托盘加载，png 用于标题栏；旧版资源保留。 -->
+    <Content Include="Assets\AppLogoV2.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\AppLogoV2.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\TrayIconV2.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
